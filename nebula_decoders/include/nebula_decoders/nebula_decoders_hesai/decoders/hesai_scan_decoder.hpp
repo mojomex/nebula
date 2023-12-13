@@ -4,9 +4,6 @@
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/point_types.hpp"
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
-
 #include <tuple>
 
 namespace nebula
@@ -28,7 +25,7 @@ public:
   /// @brief Parses PandarPacket and add its points to the point cloud
   /// @param pandar_packet The incoming PandarPacket
   /// @return The last azimuth processed
-  virtual int unpack(const pandar_msgs::msg::PandarPacket & pandar_packet) = 0;
+  virtual int unpack(const nebula_msgs::msg::RawPacketStamped & pandar_packet) = 0;
 
   /// @brief Indicates whether one full scan is ready
   /// @return Whether a scan is ready

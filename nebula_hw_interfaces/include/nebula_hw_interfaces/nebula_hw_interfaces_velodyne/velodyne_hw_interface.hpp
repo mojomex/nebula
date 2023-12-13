@@ -16,11 +16,11 @@
 #include "nebula_common/velodyne/velodyne_common.hpp"
 #include "nebula_common/velodyne/velodyne_status.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_common/nebula_hw_interface_base.hpp"
+#include "nebula_msgs_util/util.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
-#include <velodyne_msgs/msg/velodyne_packet.hpp>
-#include <velodyne_msgs/msg/velodyne_scan.hpp>
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -39,10 +39,10 @@ private:
   std::unique_ptr<::drivers::udp_driver::UdpDriver> cloud_udp_driver_;
   std::shared_ptr<VelodyneSensorConfiguration> sensor_configuration_;
   std::shared_ptr<VelodyneCalibrationConfiguration> calibration_configuration_;
-  std::unique_ptr<velodyne_msgs::msg::VelodyneScan> scan_cloud_ptr_;
+  std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_cloud_ptr_;
   std::function<bool(size_t)>
     is_valid_packet_; /*Lambda Function Array to verify proper packet size*/
-  std::function<void(std::unique_ptr<velodyne_msgs::msg::VelodyneScan> buffer)>
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray> buffer)>
     scan_reception_callback_; /**This function pointer is called when the scan is complete*/
 
   uint16_t packet_first_azm_ = 0;
@@ -137,7 +137,7 @@ public:
   /// @param scan_callback Callback function
   /// @return Resulting status
   Status RegisterScanCallback(
-    std::function<void(std::unique_ptr<velodyne_msgs::msg::VelodyneScan>)> scan_callback);
+    std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray>)> scan_callback);
 
   /// @brief Parsing JSON string to property_tree
   /// @param str JSON string

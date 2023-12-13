@@ -1,18 +1,15 @@
 #ifndef NEBULA_HesaiHwInterfaceRosWrapper_H
 #define NEBULA_HesaiHwInterfaceRosWrapper_H
 
+#include "boost_tcp_driver/tcp_driver.hpp"
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/nebula_common.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_hw_interface.hpp"
 #include "nebula_ros/common/nebula_hw_interface_ros_wrapper_base.hpp"
-#include "boost_tcp_driver/tcp_driver.hpp"
 
 #include <ament_index_cpp/get_package_prefix.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
-
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
 
 #include <boost/asio.hpp>
 
@@ -51,7 +48,7 @@ class HesaiHwInterfaceRosWrapper final : public rclcpp::Node, NebulaHwInterfaceW
   drivers::HesaiSensorConfiguration sensor_configuration_;
 
   /// @brief Received Hesai message publisher
-  rclcpp::Publisher<pandar_msgs::msg::PandarScan>::SharedPtr pandar_scan_pub_;
+  rclcpp::Publisher<nebula_msgs::msg::RawPacketArray>::SharedPtr pandar_scan_pub_;
 
   /// @brief Initializing hardware interface ros wrapper
   /// @param sensor_configuration SensorConfiguration for this driver
@@ -60,7 +57,7 @@ class HesaiHwInterfaceRosWrapper final : public rclcpp::Node, NebulaHwInterfaceW
     const drivers::SensorConfigurationBase & sensor_configuration) override;
   /// @brief Callback for receiving PandarScan
   /// @param scan_buffer Received PandarScan
-  void ReceiveScanDataCallback(std::unique_ptr<pandar_msgs::msg::PandarScan> scan_buffer);
+  void ReceiveScanDataCallback(std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_buffer);
 
 public:
   explicit HesaiHwInterfaceRosWrapper(const rclcpp::NodeOptions & options);

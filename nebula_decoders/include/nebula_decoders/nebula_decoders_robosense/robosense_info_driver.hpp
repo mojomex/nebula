@@ -12,8 +12,7 @@
 #include "nebula_decoders/nebula_decoders_robosense/decoders/robosense_info_decoder.hpp"
 #include "nebula_decoders/nebula_decoders_robosense/decoders/robosense_info_decoder_base.hpp"
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 
 #include <pcl_conversions/pcl_conversions.h>
 

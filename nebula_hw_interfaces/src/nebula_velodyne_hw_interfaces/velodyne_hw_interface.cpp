@@ -7,7 +7,7 @@ namespace drivers
 VelodyneHwInterface::VelodyneHwInterface()
 : cloud_io_context_{new ::drivers::common::IoContext(1)},
   cloud_udp_driver_{new ::drivers::udp_driver::UdpDriver(*cloud_io_context_)},
-  scan_cloud_ptr_{std::make_unique<velodyne_msgs::msg::VelodyneScan>()},
+  scan_cloud_ptr_{std::make_unique<nebula_msgs::msg::RawPacketArray>()},
   boost_ctx_{new boost::asio::io_context()},
   http_client_driver_{new ::drivers::tcp_driver::HttpClientDriver(boost_ctx_)}
 {
@@ -55,7 +55,7 @@ Status VelodyneHwInterface::CloudInterfaceStart()
 }
 
 Status VelodyneHwInterface::RegisterScanCallback(
-  std::function<void(std::unique_ptr<velodyne_msgs::msg::VelodyneScan>)> scan_callback)
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray>)> scan_callback)
 {
   scan_reception_callback_ = std::move(scan_callback);
   return Status::OK;
@@ -63,41 +63,17 @@ Status VelodyneHwInterface::RegisterScanCallback(
 
 void VelodyneHwInterface::ReceiveCloudPacketCallback(const std::vector<uint8_t> & buffer)
 {
-  // Process current packet
-  const uint32_t buffer_size = buffer.size();
-  velodyne_msgs::msg::VelodynePacket velodyne_packet;
-  std::copy_n(std::make_move_iterator(buffer.begin()), buffer_size, velodyne_packet.data.begin());
-  auto now = std::chrono::system_clock::now();
-  auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-  auto now_nanosecs =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-  velodyne_packet.stamp.sec = static_cast<int>(now_secs);
-  velodyne_packet.stamp.nanosec = static_cast<std::uint32_t>(now_nanosecs % 1'000'000'000);
-  scan_cloud_ptr_->packets.emplace_back(velodyne_packet);
-  processed_packets_++;
-
-  // Check if scan is complete
-  packet_first_azm_ = scan_cloud_ptr_->packets.back().data[2];  // lower word of azimuth block 0
-  packet_first_azm_ |= scan_cloud_ptr_->packets.back().data[3]
-                       << 8;  // higher word of azimuth block 0
-
-  packet_last_azm_ = scan_cloud_ptr_->packets.back().data[1102];
-  packet_last_azm_ |= scan_cloud_ptr_->packets.back().data[1103] << 8;
-
-  packet_first_azm_phased_ = (36000 + packet_first_azm_ - phase_) % 36000;
-  packet_last_azm_phased_ = (36000 + packet_last_azm_ - phase_) % 36000;
-
-  if (processed_packets_ > 1) {
-    if (
-      packet_last_azm_phased_ < packet_first_azm_phased_ ||
-      packet_first_azm_phased_ < prev_packet_first_azm_phased_) {
-      // Callback
-      scan_reception_callback_(std::move(scan_cloud_ptr_));
-      scan_cloud_ptr_ = std::make_unique<velodyne_msgs::msg::VelodyneScan>();
-      processed_packets_ = 0;
-    }
+  if (!scan_reception_callback_) {
+    return;
   }
-  prev_packet_first_azm_phased_ = packet_first_azm_phased_;
+
+  auto now = std::chrono::system_clock::now();
+  auto packet_stamped = scan_cloud_ptr_->packets.emplace_back();
+  packet_stamped.stamp = nebula_msgs::util::make_timestamp(now);
+  packet_stamped.packet.data = buffer;  // TODO(mojomex): maybe swap instead of copy?
+
+  scan_reception_callback_(std::move(scan_cloud_ptr_));
+  scan_cloud_ptr_ = std::make_unique<nebula_msgs::msg::RawPacketArray>();
 }
 Status VelodyneHwInterface::CloudInterfaceStop()
 {

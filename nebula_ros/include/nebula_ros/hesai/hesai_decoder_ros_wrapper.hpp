@@ -15,9 +15,6 @@
 
 #include <chrono>
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
-
 namespace nebula
 {
 namespace ros
@@ -27,7 +24,7 @@ class HesaiDriverRosWrapper final : public rclcpp::Node, NebulaDriverRosWrapperB
 {
   std::shared_ptr<drivers::HesaiDriver> driver_ptr_;
   Status wrapper_status_;
-  rclcpp::Subscription<pandar_msgs::msg::PandarScan>::SharedPtr pandar_scan_sub_;
+  rclcpp::Subscription<nebula_msgs::msg::RawPacketArray>::SharedPtr pandar_scan_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr nebula_points_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_ex_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_base_pub_;
@@ -89,7 +86,7 @@ public:
 
   /// @brief Callback for PandarScan subscriber
   /// @param scan_msg Received PandarScan
-  void ReceiveScanMsgCallback(const pandar_msgs::msg::PandarScan::SharedPtr scan_msg);
+  void ReceiveScanMsgCallback(const nebula_msgs::msg::RawPacketArray::SharedPtr scan_msg);
 
   /// @brief Get current status of this driver
   /// @return Current status

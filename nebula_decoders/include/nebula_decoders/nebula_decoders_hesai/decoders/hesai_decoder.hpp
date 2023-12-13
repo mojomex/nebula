@@ -5,9 +5,6 @@
 
 #include <rclcpp/rclcpp.hpp>
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
-
 namespace nebula
 {
 namespace drivers
@@ -54,15 +51,16 @@ protected:
   /// @brief Validates and parse PandarPacket. Currently only checks size, not checksums etc.
   /// @param pandar_packet The incoming PandarPacket
   /// @return Whether the packet was parsed successfully
-  bool parsePacket(const pandar_msgs::msg::PandarPacket & pandar_packet)
+  bool parsePacket(const nebula_msgs::msg::RawPacketStamped & pandar_packet)
   {
-    if (pandar_packet.size < sizeof(typename SensorT::packet_t)) {
+    const auto & packet_bytes = pandar_packet.packet.data;
+    if (packet_bytes.size() < sizeof(typename SensorT::packet_t)) {
       RCLCPP_ERROR_STREAM(
-        logger_, "Packet size mismatch:" << pandar_packet.size << " | Expected at least:"
+        logger_, "Packet size mismatch:" << packet_bytes.size() << " | Expected at least:"
                                          << sizeof(typename SensorT::packet_t));
       return false;
     }
-    if (std::memcpy(&packet_, pandar_packet.data.data(), sizeof(typename SensorT::packet_t))) {
+    if (std::memcpy(&packet_, packet_bytes.data(), sizeof(typename SensorT::packet_t))) {
       // FIXME(mojomex) do validation?
       // RCLCPP_DEBUG(logger_, "Packet parsed successfully");
       return true;
@@ -219,7 +217,7 @@ public:
     output_pc_->reserve(SensorT::MAX_SCAN_BUFFER_POINTS);
   }
 
-  int unpack(const pandar_msgs::msg::PandarPacket & pandar_packet) override
+  int unpack(const nebula_msgs::msg::RawPacketStamped & pandar_packet) override
   {
     if (!parsePacket(pandar_packet)) {
       return -1;

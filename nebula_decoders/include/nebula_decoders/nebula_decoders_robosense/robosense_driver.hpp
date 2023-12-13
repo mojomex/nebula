@@ -7,9 +7,6 @@
 #include "nebula_decoders/nebula_decoders_common/nebula_driver_base.hpp"
 #include "nebula_decoders/nebula_decoders_robosense/decoders/robosense_decoder.hpp"
 
-#include "robosense_msgs/msg/robosense_packet.hpp"
-#include "robosense_msgs/msg/robosense_scan.hpp"
-
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <iostream>
@@ -54,7 +51,7 @@ public:
   /// @param robosense_scan Message
   /// @return tuple of Point cloud and timestamp
   std::tuple<drivers::NebulaPointCloudPtr, double> ConvertScanToPointcloud(
-    const std::shared_ptr<robosense_msgs::msg::RobosenseScan> & robosense_scan);
+    const std::shared_ptr<nebula_msgs::msg::RawPacketArray> & robosense_scan);
 };
 
 }  // namespace drivers

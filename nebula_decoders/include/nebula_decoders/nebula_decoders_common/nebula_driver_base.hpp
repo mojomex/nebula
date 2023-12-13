@@ -3,7 +3,9 @@
 
 #include "nebula_common/nebula_common.hpp"
 #include "nebula_common/nebula_status.hpp"
+#include "nebula_msgs_util/util.hpp"
 
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <string>

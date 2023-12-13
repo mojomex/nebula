@@ -51,7 +51,7 @@ Status RobosenseDriver::SetCalibrationConfiguration(
 }
 
 std::tuple<drivers::NebulaPointCloudPtr, double> RobosenseDriver::ConvertScanToPointcloud(
-  const std::shared_ptr<robosense_msgs::msg::RobosenseScan> & robosense_scan)
+  const std::shared_ptr<nebula_msgs::msg::RawPacketArray> & robosense_scan)
 {
   std::tuple<drivers::NebulaPointCloudPtr, double> pointcloud;
   auto logger = rclcpp::get_logger("RobosenseDriver");

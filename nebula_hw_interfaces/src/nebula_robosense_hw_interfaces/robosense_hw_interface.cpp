@@ -8,95 +8,49 @@ RobosenseHwInterface::RobosenseHwInterface()
   info_io_context_{new ::drivers::common::IoContext(1)},
   cloud_udp_driver_{new ::drivers::udp_driver::UdpDriver(*cloud_io_context_)},
   info_udp_driver_{new ::drivers::udp_driver::UdpDriver(*info_io_context_)},
-  scan_cloud_ptr_{std::make_unique<robosense_msgs::msg::RobosenseScan>()}
+  scan_cloud_ptr_{std::make_unique<nebula_msgs::msg::RawPacketArray>()}
 {
 }
 
 void RobosenseHwInterface::ReceiveCloudPacketCallback(const std::vector<uint8_t> & buffer)
 {
-  int scan_phase = static_cast<int>(sensor_configuration_->scan_phase * 100.0);
+  if (!scan_reception_callback_) {
+    return;
+  }
+
   if (!is_valid_packet_(buffer.size())) {
     PrintDebug("Invalid Packet: " + std::to_string(buffer.size()));
     return;
   }
-  // Copy data
-  uint32_t buffer_size = buffer.size();
-  std::array<uint8_t, MTU_SIZE> packet_data{};
-  std::copy_n(std::make_move_iterator(buffer.begin()), buffer_size, packet_data.begin());
-  robosense_msgs::msg::RobosensePacket msop_packet;
-  msop_packet.data = packet_data;
 
-  // Add timestamp (Sensor timestamp will be handled by decoder)
-  const auto now = std::chrono::system_clock::now();
-  const auto timestamp_ns =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+  auto now = std::chrono::system_clock::now();
+  auto packet_stamped = scan_cloud_ptr_->packets.emplace_back();
+  packet_stamped.stamp = nebula_msgs::util::make_timestamp(now);
+  packet_stamped.packet.data = buffer;  // TODO(mojomex): maybe swap instead of copy?
 
-  constexpr int nanosec_per_sec = 1000000000;
-  msop_packet.stamp.sec = static_cast<int>(timestamp_ns / nanosec_per_sec);
-  msop_packet.stamp.nanosec = static_cast<int>(timestamp_ns % nanosec_per_sec);
-
-  if (
-    !sensor_model_.has_value() &&
-    sensor_configuration_->sensor_model == SensorModel::ROBOSENSE_BPEARL) {
-    if (buffer[32] == BPEARL_V4_FLAG) {
-      sensor_model_.emplace(drivers::SensorModel::ROBOSENSE_BPEARL_V4);
-      PrintInfo("Bpearl V4 detected.");
-    } else {
-      sensor_model_.emplace(drivers::SensorModel::ROBOSENSE_BPEARL_V3);
-      PrintInfo("Bpearl V3 detected.");
-    }
-  }
-
-  scan_cloud_ptr_->packets.emplace_back(msop_packet);
-
-  int current_phase{};
-  bool comp_flg = false;
-
-  const auto & data = scan_cloud_ptr_->packets.back().data;
-  current_phase = (data[azimuth_index_ + 1] & 0xff) + ((data[azimuth_index_] & 0xff) << 8);
-
-  current_phase = (static_cast<int>(current_phase) + 36000 - scan_phase) % 36000;
-
-  if (current_phase >= prev_phase_ || scan_cloud_ptr_->packets.size() < 2) {
-    prev_phase_ = current_phase;
-  } else {
-    comp_flg = true;
-  }
-
-  if (comp_flg) {  // Scan complete
-    if (scan_reception_callback_) {
-      scan_cloud_ptr_->header.stamp = scan_cloud_ptr_->packets.front().stamp;
-      // Callback
-      scan_reception_callback_(std::move(scan_cloud_ptr_));
-      scan_cloud_ptr_ = std::make_unique<robosense_msgs::msg::RobosenseScan>();
-    }
-  }
+  scan_reception_callback_(std::move(scan_cloud_ptr_));
+  scan_cloud_ptr_ = std::make_unique<nebula_msgs::msg::RawPacketArray>();
 }
 
 void RobosenseHwInterface::ReceiveInfoPacketCallback(const std::vector<uint8_t> & buffer)
 {
+  if (!info_reception_callback_) {
+    return;
+  }
+
   if (!is_valid_info_packet_(buffer.size())) {
     PrintDebug("Invalid Packet: " + std::to_string(buffer.size()));
     return;
   }
 
-  info_buffer_.emplace(buffer);  //////
-  is_info_received = true;       ////////
+  std::unique_ptr<nebula_msgs::msg::RawPacketStamped> packet =
+    std::make_unique<nebula_msgs::msg::RawPacketStamped>();
+  auto now = std::chrono::system_clock::now();
 
-  if (info_reception_callback_) {
-    std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket> difop_packet =
-      std::make_unique<robosense_msgs::msg::RobosenseInfoPacket>();
-    std::copy_n(
-      std::make_move_iterator(buffer.begin()), buffer.size(), difop_packet->packet.data.begin());
+  packet->stamp = nebula_msgs::util::make_timestamp(now);
+  packet->packet.data = buffer;  // TODO(mojomex): maybe swap instead of copy?
 
-    if (sensor_model_.has_value()) {
-      difop_packet->lidar_model = SensorModelToString(sensor_model_.value());
-    } else {
-      difop_packet->lidar_model = SensorModelToString(sensor_configuration_->sensor_model);
-    }
-
-    info_reception_callback_(std::move(difop_packet));
-  }
+  info_reception_callback_(std::move(packet));
 }
 
 Status RobosenseHwInterface::CloudInterfaceStart()
@@ -163,13 +117,11 @@ Status RobosenseHwInterface::SetSensorConfiguration(
       sensor_configuration_->sensor_model == SensorModel::ROBOSENSE_BPEARL ||
       sensor_configuration_->sensor_model == SensorModel::ROBOSENSE_BPEARL_V3 ||
       sensor_configuration_->sensor_model == SensorModel::ROBOSENSE_BPEARL_V4) {
-      azimuth_index_ = 44;
       is_valid_packet_ = [](size_t packet_size) { return (packet_size == BPEARL_PACKET_SIZE); };
       is_valid_info_packet_ = [](size_t packet_size) {
         return (packet_size == BPEARL_INFO_PACKET_SIZE);
       };
     } else if (sensor_configuration->sensor_model == SensorModel::ROBOSENSE_HELIOS) {
-      azimuth_index_ = 44;
       is_valid_packet_ = [](size_t packet_size) { return (packet_size == HELIOS_PACKET_SIZE); };
       is_valid_info_packet_ = [](size_t packet_size) {
         return (packet_size == HELIOS_INFO_PACKET_SIZE);
@@ -201,14 +153,14 @@ Status RobosenseHwInterface::GetCalibrationConfiguration(
 }
 
 Status RobosenseHwInterface::RegisterScanCallback(
-  std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseScan>)> scan_callback)
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray>)> scan_callback)
 {
   scan_reception_callback_ = std::move(scan_callback);
   return Status::OK;
 }
 
 Status RobosenseHwInterface::RegisterInfoCallback(
-  std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket>)> info_callback)
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketStamped>)> info_callback)
 {
   info_reception_callback_ = std::move(info_callback);
   return Status::OK;

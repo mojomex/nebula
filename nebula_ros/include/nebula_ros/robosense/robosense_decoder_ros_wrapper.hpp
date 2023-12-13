@@ -13,10 +13,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
-#include "robosense_msgs/msg/robosense_info_packet.hpp"
-#include "robosense_msgs/msg/robosense_packet.hpp"
-#include "robosense_msgs/msg/robosense_scan.hpp"
-
 #include <chrono>
 
 namespace nebula
@@ -30,8 +26,8 @@ class RobosenseDriverRosWrapper final : public rclcpp::Node, NebulaDriverRosWrap
   std::shared_ptr<drivers::RobosenseInfoDriver> info_driver_ptr_;
   Status wrapper_status_;
   bool is_received_info{false};
-  rclcpp::Subscription<robosense_msgs::msg::RobosenseScan>::SharedPtr robosense_scan_sub_;
-  rclcpp::Subscription<robosense_msgs::msg::RobosenseInfoPacket>::SharedPtr robosense_info_sub_;
+  rclcpp::Subscription<nebula_msgs::msg::RawPacketArray>::SharedPtr robosense_scan_sub_;
+  rclcpp::Subscription<nebula_msgs::msg::RawPacketStamped>::SharedPtr robosense_info_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr nebula_points_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_ex_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_base_pub_;
@@ -84,11 +80,11 @@ public:
 
   /// @brief Callback for RobosenseScan subscriber
   /// @param scan_msg Received RobosenseScan
-  void ReceiveScanMsgCallback(const robosense_msgs::msg::RobosenseScan::SharedPtr scan_msg);
+  void ReceiveScanMsgCallback(const nebula_msgs::msg::RawPacketArray::SharedPtr scan_msg);
 
   /// @brief Callback for DIFOP packet subscriber
   /// @param scan_msg Received RobosensePacket
-  void ReceiveInfoMsgCallback(const robosense_msgs::msg::RobosenseInfoPacket::SharedPtr info_msg);
+  void ReceiveInfoMsgCallback(const nebula_msgs::msg::RawPacketStamped::SharedPtr info_msg);
 
   /// @brief Get current status of this driver
   /// @return Current status

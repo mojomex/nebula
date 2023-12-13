@@ -10,18 +10,18 @@
 #if (BOOST_VERSION / 100 == 1074)  // Boost 1.74
 #define BOOST_ALLOW_DEPRECATED_HEADERS
 #endif
+#include "boost_tcp_driver/http_client_driver.hpp"
+#include "boost_tcp_driver/tcp_driver.hpp"
+#include "boost_udp_driver/udp_driver.hpp"
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/hesai/hesai_status.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_common/nebula_hw_interface_base.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_cmd_response.hpp"
-#include "boost_tcp_driver/http_client_driver.hpp"
-#include "boost_tcp_driver/tcp_driver.hpp"
-#include "boost_udp_driver/udp_driver.hpp"
+#include "nebula_msgs_util/util.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -77,12 +77,15 @@ const uint16_t PANDAR128_E4X_EXTENDED_PACKET_SIZE = 1117;
 
 const uint16_t MTU_SIZE = 1500;
 
-const int PTP_PROFILE = 0; // Fixed: IEEE 1588v2
-const int PTP_DOMAIN_ID = 0; // 0-127, Default: 0
-const int PTP_NETWORK_TRANSPORT = 0; // 0: UDP/IP, 1: L2
-const int PTP_LOG_ANNOUNCE_INTERVAL = 1; // Time interval between Announce messages, in units of log seconds (default: 1)
-const int PTP_SYNC_INTERVAL = 1; //Time interval between Sync messages, in units of log seconds (default: 1)
-const int PTP_LOG_MIN_DELAY_INTERVAL = 0; //Minimum permitted mean time between Delay_Req messages, in units of log seconds (default: 0)
+const int PTP_PROFILE = 0;            // Fixed: IEEE 1588v2
+const int PTP_DOMAIN_ID = 0;          // 0-127, Default: 0
+const int PTP_NETWORK_TRANSPORT = 0;  // 0: UDP/IP, 1: L2
+const int PTP_LOG_ANNOUNCE_INTERVAL =
+  1;  // Time interval between Announce messages, in units of log seconds (default: 1)
+const int PTP_SYNC_INTERVAL =
+  1;  // Time interval between Sync messages, in units of log seconds (default: 1)
+const int PTP_LOG_MIN_DELAY_INTERVAL = 0;  // Minimum permitted mean time between Delay_Req
+                                           // messages, in units of log seconds (default: 0)
 
 const int HESAI_LIDAR_GPS_CLOCK_SOURCE = 0;
 const int HESAI_LIDAR_PTP_CLOCK_SOURCE = 1;
@@ -99,15 +102,12 @@ private:
   std::shared_ptr<::drivers::tcp_driver::TcpDriver> tcp_driver_s_;
   std::shared_ptr<HesaiSensorConfiguration> sensor_configuration_;
   std::shared_ptr<HesaiCalibrationConfiguration> calibration_configuration_;
-  size_t azimuth_index_{};
   size_t mtu_size_{};
-  std::unique_ptr<pandar_msgs::msg::PandarScan> scan_cloud_ptr_;
+  std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_cloud_ptr_;
   std::function<bool(size_t)>
     is_valid_packet_; /*Lambda Function Array to verify proper packet size*/
-  std::function<void(std::unique_ptr<pandar_msgs::msg::PandarScan> buffer)>
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray> buffer)>
     scan_reception_callback_; /**This function pointer is called when the scan is complete*/
-
-  int prev_phase_{};
 
   int timeout_ = 2000;
   std::timed_mutex tm_;
@@ -117,7 +117,6 @@ private:
   int tms_fail_cnt = 0;
   int tms_fail_cnt_max = 3;
   bool wl = true;
-  bool is_solid_state = false;
   int target_model_no;
 
   /// @brief Get a one-off HTTP client to communicate with the hardware
@@ -206,7 +205,7 @@ public:
   /// @param scan_callback Callback function
   /// @return Resulting status
   Status RegisterScanCallback(
-    std::function<void(std::unique_ptr<pandar_msgs::msg::PandarScan>)> scan_callback);
+    std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray>)> scan_callback);
   /// @brief Getting data with PTC_COMMAND_GET_LIDAR_CALIBRATION (sync)
   /// @param target_tcp_driver TcpDriver used
   /// @return Resulting status
@@ -376,8 +375,7 @@ public:
   /// @brief Getting data with PTC_COMMAND_GET_INVENTORY_INFO (sync)
   /// @param target_tcp_driver TcpDriver used
   /// @return Resulting status
-  Status syncGetInventory(
-    std::shared_ptr<::drivers::tcp_driver::TcpDriver> target_tcp_driver);
+  Status syncGetInventory(std::shared_ptr<::drivers::tcp_driver::TcpDriver> target_tcp_driver);
   /// @brief Getting data with PTC_COMMAND_GET_INVENTORY_INFO (sync)
   /// @param ctx IO Context used
   /// @param callback Callback function for received HesaiInventory
@@ -770,8 +768,11 @@ public:
   /// @return Resulting status
   Status GetLidarRange(bool with_run = true);
 
-  Status SetClockSource(std::shared_ptr<::drivers::tcp_driver::TcpDriver> target_tcp_driver, int clock_source, bool with_run);
-  Status SetClockSource(std::shared_ptr<boost::asio::io_context> ctx, int clock_source, bool with_run);
+  Status SetClockSource(
+    std::shared_ptr<::drivers::tcp_driver::TcpDriver> target_tcp_driver, int clock_source,
+    bool with_run);
+  Status SetClockSource(
+    std::shared_ptr<boost::asio::io_context> ctx, int clock_source, bool with_run);
   Status SetClockSource(int clock_source, bool with_run = true);
 
   /// @brief Setting values with PTC_COMMAND_SET_PTP_CONFIG
@@ -916,26 +917,14 @@ public:
   HesaiStatus SetSpinSpeedAsyncHttp(uint16_t rpm);
 
   HesaiStatus SetPtpConfigSyncHttp(
-    std::shared_ptr<boost::asio::io_context> ctx,
-    int profile,
-    int domain,
-    int network,
-    int logAnnounceInterval,
-    int logSyncInterval,
+    std::shared_ptr<boost::asio::io_context> ctx, int profile, int domain, int network,
+    int logAnnounceInterval, int logSyncInterval, int logMinDelayReqInterval);
+  HesaiStatus SetPtpConfigSyncHttp(
+    int profile, int domain, int network, int logAnnounceInterval, int logSyncInterval,
     int logMinDelayReqInterval);
-  HesaiStatus SetPtpConfigSyncHttp(int profile,
-                                   int domain,
-                                   int network,
-                                   int logAnnounceInterval,
-                                   int logSyncInterval,
-                                   int logMinDelayReqInterval);
   HesaiStatus SetSyncAngleSyncHttp(
-    std::shared_ptr<boost::asio::io_context> ctx,
-    int enable,
-    int angle);
+    std::shared_ptr<boost::asio::io_context> ctx, int enable, int angle);
   HesaiStatus SetSyncAngleSyncHttp(int enable, int angle);
-
-
 
   /// @brief Getting lidar_monitor via HTTP API
   /// @param ctx IO Context
@@ -967,8 +956,8 @@ public:
   HesaiStatus CheckAndSetConfig();
 
   /// @brief Convert to model in Hesai protocol from nebula::drivers::SensorModel
-  /// @param model 
-  /// @return 
+  /// @param model
+  /// @return
   int NebulaModelToHesaiModelNo(nebula::drivers::SensorModel model);
 
   /// @brief Set target model number (for proper use of HTTP and TCP according to the support of the

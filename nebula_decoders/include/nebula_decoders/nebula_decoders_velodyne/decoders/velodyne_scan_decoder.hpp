@@ -22,8 +22,7 @@
 #include "nebula_common/velodyne/velodyne_calibration_decoder.hpp"
 #include "nebula_common/velodyne/velodyne_common.hpp"
 
-#include <velodyne_msgs/msg/velodyne_packet.hpp>
-#include <velodyne_msgs/msg/velodyne_scan.hpp>
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 
 #include <tuple>
 
@@ -167,11 +166,11 @@ public:
 
   /// @brief Virtual function for parsing and shaping VelodynePacket
   /// @param pandar_packet
-  virtual void unpack(const velodyne_msgs::msg::VelodynePacket & velodyne_packet) = 0;
+  virtual void unpack(const nebula_msgs::msg::RawPacketStamped & velodyne_packet) = 0;
   /// @brief Virtual function for parsing VelodynePacket based on packet structure
   /// @param pandar_packet
   /// @return Resulting flag
-  virtual bool parsePacket(const velodyne_msgs::msg::VelodynePacket & velodyne_packet) = 0;
+  virtual bool parsePacket(const nebula_msgs::msg::RawPacketStamped & velodyne_packet) = 0;
 
   /// @brief Virtual function for getting the flag indicating whether one cycle is ready
   /// @return Readied

@@ -23,36 +23,32 @@ HesaiHwInterfaceRosWrapper::HesaiHwInterfaceRosWrapper(const rclcpp::NodeOptions
     std::static_pointer_cast<drivers::SensorConfigurationBase>(sensor_cfg_ptr));
 #if not defined(TEST_PCAP)
   Status rt = hw_interface_.InitializeTcpDriver(this->setup_sensor);
-  if(this->retry_hw_)
-  {
+  if (this->retry_hw_) {
     int cnt = 0;
     RCLCPP_INFO_STREAM(this->get_logger(), this->get_name() << " Retry: " << cnt);
-    while(rt == Status::ERROR_1)
-    {
+    while (rt == Status::ERROR_1) {
       cnt++;
-      std::this_thread::sleep_for(std::chrono::milliseconds(8000));// >5000
+      std::this_thread::sleep_for(std::chrono::milliseconds(8000));  // >5000
       RCLCPP_ERROR_STREAM(this->get_logger(), this->get_name() << " Retry: " << cnt);
       rt = hw_interface_.InitializeTcpDriver(this->setup_sensor);
     }
   }
 
-  if(rt != Status::ERROR_1){
-    try{
+  if (rt != Status::ERROR_1) {
+    try {
       std::vector<std::thread> thread_pool{};
-        thread_pool.emplace_back([this] {
-          hw_interface_.GetInventory(  // ios,
-            [this](HesaiInventory & result) {
-              RCLCPP_INFO_STREAM(get_logger(), result);
-              hw_interface_.SetTargetModel(result.model);
-            });
-        });
-        for (std::thread & th : thread_pool) {
-          th.join();
-        }
+      thread_pool.emplace_back([this] {
+        hw_interface_.GetInventory(  // ios,
+          [this](HesaiInventory & result) {
+            RCLCPP_INFO_STREAM(get_logger(), result);
+            hw_interface_.SetTargetModel(result.model);
+          });
+      });
+      for (std::thread & th : thread_pool) {
+        th.join();
+      }
 
-    }
-    catch (...)
-    {
+    } catch (...) {
       std::cout << "catch (...) in parent" << std::endl;
       RCLCPP_ERROR_STREAM(get_logger(), "Failed to get model from sensor...");
     }
@@ -60,18 +56,18 @@ HesaiHwInterfaceRosWrapper::HesaiHwInterfaceRosWrapper(const rclcpp::NodeOptions
       hw_interface_.CheckAndSetConfig();
       updateParameters();
     }
-  }
-  else
-  {
-    RCLCPP_ERROR_STREAM(get_logger(), "Failed to get model from sensor... Set from config: " << sensor_cfg_ptr->sensor_model);
+  } else {
+    RCLCPP_ERROR_STREAM(
+      get_logger(),
+      "Failed to get model from sensor... Set from config: " << sensor_cfg_ptr->sensor_model);
     hw_interface_.SetTargetModel(sensor_cfg_ptr->sensor_model);
   }
 #endif
 
   hw_interface_.RegisterScanCallback(
     std::bind(&HesaiHwInterfaceRosWrapper::ReceiveScanDataCallback, this, std::placeholders::_1));
-  pandar_scan_pub_ =
-    this->create_publisher<pandar_msgs::msg::PandarScan>("pandar_packets", rclcpp::SensorDataQoS());
+  pandar_scan_pub_ = this->create_publisher<nebula_msgs::msg::RawPacketArray>(
+    "pandar_packets", rclcpp::SensorDataQoS());
 
 #if not defined(TEST_PCAP)
   if (this->setup_sensor) {
@@ -147,7 +143,8 @@ HesaiHwInterfaceRosWrapper::HesaiHwInterfaceRosWrapper(const rclcpp::NodeOptions
   StreamStart();
 }
 
-HesaiHwInterfaceRosWrapper::~HesaiHwInterfaceRosWrapper() {
+HesaiHwInterfaceRosWrapper::~HesaiHwInterfaceRosWrapper()
+{
   RCLCPP_INFO_STREAM(get_logger(), "Closing TcpDriver");
   hw_interface_.FinalizeTcpDriver();
 }
@@ -160,8 +157,14 @@ Status HesaiHwInterfaceRosWrapper::StreamStart()
   return interface_status_;
 }
 
-Status HesaiHwInterfaceRosWrapper::StreamStop() { return Status::OK; }
-Status HesaiHwInterfaceRosWrapper::Shutdown() { return Status::OK; }
+Status HesaiHwInterfaceRosWrapper::StreamStop()
+{
+  return Status::OK;
+}
+Status HesaiHwInterfaceRosWrapper::Shutdown()
+{
+  return Status::OK;
+}
 
 Status HesaiHwInterfaceRosWrapper::InitializeHwInterface(  // todo: don't think this is needed
   const drivers::SensorConfigurationBase & sensor_configuration)
@@ -362,12 +365,9 @@ Status HesaiHwInterfaceRosWrapper::GetParameters(
 }
 
 void HesaiHwInterfaceRosWrapper::ReceiveScanDataCallback(
-  std::unique_ptr<pandar_msgs::msg::PandarScan> scan_buffer)
+  std::unique_ptr<nebula_msgs::msg::RawPacketArray> packets)
 {
-  // Publish
-  scan_buffer->header.frame_id = sensor_configuration_.frame_id;
-  scan_buffer->header.stamp = scan_buffer->packets.front().stamp;
-  pandar_scan_pub_->publish(*scan_buffer);
+  pandar_scan_pub_->publish(*packets);
 }
 
 rcl_interfaces::msg::SetParametersResult HesaiHwInterfaceRosWrapper::paramCallback(

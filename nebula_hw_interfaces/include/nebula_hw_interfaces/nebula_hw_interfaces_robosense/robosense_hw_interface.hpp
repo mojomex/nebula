@@ -14,12 +14,11 @@
 #include "boost_udp_driver/udp_driver.hpp"
 #include "nebula_common/robosense/robosense_common.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_common/nebula_hw_interface_base.hpp"
+#include "nebula_msgs_util/util.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
-#include "robosense_msgs/msg/robosense_info_packet.hpp"
-#include "robosense_msgs/msg/robosense_packet.hpp"
-#include "robosense_msgs/msg/robosense_scan.hpp"
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 
 namespace nebula
 {
@@ -40,19 +39,14 @@ private:
   std::unique_ptr<::drivers::udp_driver::UdpDriver> cloud_udp_driver_;
   std::unique_ptr<::drivers::udp_driver::UdpDriver> info_udp_driver_;
   std::shared_ptr<RobosenseSensorConfiguration> sensor_configuration_;
-  std::unique_ptr<robosense_msgs::msg::RobosenseScan> scan_cloud_ptr_;
-  size_t azimuth_index_{44};  // For Helios and Bpearl 42 byte header + 2 byte flag
-  int prev_phase_{};
-  std::atomic<bool> is_info_received{false};         // To check if DIFOP is received
-  std::optional<std::vector<uint8_t>> info_buffer_;  // To hold DIFOP data
-  std::optional<SensorModel> sensor_model_;          // To hold sensor model
+  std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_cloud_ptr_;
   std::function<bool(size_t)>
     is_valid_packet_; /*Lambda Function Array to verify proper packet size for data*/
   std::function<bool(size_t)>
     is_valid_info_packet_; /*Lambda Function Array to verify proper packet size for info*/
-  std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseScan> buffer)>
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray> buffer)>
     scan_reception_callback_; /**This function pointer is called when the scan is complete*/
-  std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket> buffer)>
+  std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketStamped> buffer)>
     info_reception_callback_; /**This function pointer is called when DIFOP packet is received*/
   std::shared_ptr<rclcpp::Logger> parent_node_logger_;
 
@@ -109,13 +103,13 @@ public:
   /// @param scan_callback Callback function
   /// @return Resulting status
   Status RegisterScanCallback(
-    std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseScan>)> scan_callback);
+    std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketArray>)> scan_callback);
 
   /// @brief Registering callback for RobosensePacket
   /// @param scan_callback Callback function
   /// @return Resulting status
   Status RegisterInfoCallback(
-    std::function<void(std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket>)> info_callback);
+    std::function<void(std::unique_ptr<nebula_msgs::msg::RawPacketStamped>)> info_callback);
 
   /// @brief Setting rclcpp::Logger
   /// @param node Logger

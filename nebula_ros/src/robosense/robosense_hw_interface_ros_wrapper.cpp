@@ -29,10 +29,10 @@ ros::RobosenseHwInterfaceRosWrapper::RobosenseHwInterfaceRosWrapper(
   hw_interface_.RegisterInfoCallback(std::bind(
     &RobosenseHwInterfaceRosWrapper::ReceiveInfoDataCallback, this, std::placeholders::_1));
 
-  robosense_scan_pub_ = this->create_publisher<robosense_msgs::msg::RobosenseScan>(
+  robosense_scan_pub_ = this->create_publisher<nebula_msgs::msg::RawPacketArray>(
     "robosense_packets", rclcpp::SensorDataQoS());
 
-  robosense_difop_pub_ = this->create_publisher<robosense_msgs::msg::RobosenseInfoPacket>(
+  robosense_difop_pub_ = this->create_publisher<nebula_msgs::msg::RawPacketStamped>(
     "robosense_difop_packets", rclcpp::SensorDataQoS());
 
   StreamStart();
@@ -148,18 +148,14 @@ Status RobosenseHwInterfaceRosWrapper::GetParameters(
 }
 
 void RobosenseHwInterfaceRosWrapper::ReceiveScanDataCallback(
-  std::unique_ptr<robosense_msgs::msg::RobosenseScan> scan_buffer)
+  std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_buffer)
 {
-  // Publish
-  scan_buffer->header.frame_id = sensor_configuration_.frame_id;
-  scan_buffer->header.stamp = scan_buffer->packets.front().stamp;
   robosense_scan_pub_->publish(*scan_buffer);
 }
 
 void RobosenseHwInterfaceRosWrapper::ReceiveInfoDataCallback(
-  std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket> difop_buffer)
+  std::unique_ptr<nebula_msgs::msg::RawPacketStamped> difop_buffer)
 {
-  // Publish
   robosense_difop_pub_->publish(*difop_buffer);
 }
 

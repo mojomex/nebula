@@ -4,6 +4,8 @@
 #include "nebula_common/nebula_common.hpp"
 #include "nebula_common/nebula_status.hpp"
 
+#include "nebula_msgs/msg/raw_packet_array.hpp"
+
 #include <memory>
 #include <string>
 #include <vector>

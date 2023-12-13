@@ -8,10 +8,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
-#include "robosense_msgs/msg/robosense_info_packet.hpp"
-#include "robosense_msgs/msg/robosense_packet.hpp"
-#include "robosense_msgs/msg/robosense_scan.hpp"
-
 namespace nebula
 {
 namespace ros
@@ -64,10 +60,10 @@ private:
   Status interface_status_;
 
   /// @brief Received Robosense Scan message publisher
-  rclcpp::Publisher<robosense_msgs::msg::RobosenseScan>::SharedPtr robosense_scan_pub_;
+  rclcpp::Publisher<nebula_msgs::msg::RawPacketArray>::SharedPtr robosense_scan_pub_;
 
   /// @brief Received Robosense Difop message publisher
-  rclcpp::Publisher<robosense_msgs::msg::RobosenseInfoPacket>::SharedPtr robosense_difop_pub_;
+  rclcpp::Publisher<nebula_msgs::msg::RawPacketStamped>::SharedPtr robosense_difop_pub_;
 
   /// @brief Initializing hardware interface ros wrapper
   /// @param sensor_configuration SensorConfiguration for this driver
@@ -77,11 +73,11 @@ private:
 
   /// @brief Callback for receiving RobosenseScan
   /// @param scan_buffer Received RobosenseScan
-  void ReceiveScanDataCallback(std::unique_ptr<robosense_msgs::msg::RobosenseScan> scan_buffer);
+  void ReceiveScanDataCallback(std::unique_ptr<nebula_msgs::msg::RawPacketArray> scan_buffer);
 
   /// @brief Callback for receiving RobosensePacket
   /// @param difop_buffer Received DIFOP packet
-  void ReceiveInfoDataCallback(std::unique_ptr<robosense_msgs::msg::RobosenseInfoPacket> difop_buffer);
+  void ReceiveInfoDataCallback(std::unique_ptr<nebula_msgs::msg::RawPacketStamped> difop_buffer);
 };
 
 }  // namespace ros

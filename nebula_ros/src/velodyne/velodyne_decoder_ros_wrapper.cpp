@@ -29,7 +29,7 @@ VelodyneDriverRosWrapper::VelodyneDriverRosWrapper(const rclcpp::NodeOptions & o
 
   RCLCPP_INFO_STREAM(this->get_logger(), this->get_name() << "Wrapper=" << wrapper_status_);
 
-  velodyne_scan_sub_ = create_subscription<velodyne_msgs::msg::VelodyneScan>(
+  velodyne_scan_sub_ = create_subscription<nebula_msgs::msg::RawPacketArray>(
     "velodyne_packets", rclcpp::SensorDataQoS(),
     std::bind(&VelodyneDriverRosWrapper::ReceiveScanMsgCallback, this, std::placeholders::_1));
   nebula_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -41,7 +41,7 @@ VelodyneDriverRosWrapper::VelodyneDriverRosWrapper(const rclcpp::NodeOptions & o
 }
 
 void VelodyneDriverRosWrapper::ReceiveScanMsgCallback(
-  const velodyne_msgs::msg::VelodyneScan::SharedPtr scan_msg)
+  const nebula_msgs::msg::RawPacketArray::SharedPtr scan_msg)
 {
   auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -86,7 +86,8 @@ void VelodyneDriverRosWrapper::ReceiveScanMsgCallback(
   }
 
   auto runtime = std::chrono::high_resolution_clock::now() - t_start;
-  RCLCPP_DEBUG(get_logger(), "PROFILING {'d_total': %lu, 'n_out': %lu}", runtime.count(), pointcloud->size());
+  RCLCPP_DEBUG(
+    get_logger(), "PROFILING {'d_total': %lu, 'n_out': %lu}", runtime.count(), pointcloud->size());
 }
 
 void VelodyneDriverRosWrapper::PublishCloud(
@@ -111,7 +112,10 @@ Status VelodyneDriverRosWrapper::InitializeDriver(
   return driver_ptr_->GetStatus();
 }
 
-Status VelodyneDriverRosWrapper::GetStatus() { return wrapper_status_; }
+Status VelodyneDriverRosWrapper::GetStatus()
+{
+  return wrapper_status_;
+}
 
 Status VelodyneDriverRosWrapper::GetParameters(
   drivers::VelodyneSensorConfiguration & sensor_configuration,

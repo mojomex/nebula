@@ -2,9 +2,6 @@
 
 #include "nebula_decoders/nebula_decoders_velodyne/decoders/velodyne_scan_decoder.hpp"
 
-#include <velodyne_msgs/msg/velodyne_packet.hpp>
-#include <velodyne_msgs/msg/velodyne_scan.hpp>
-
 #include <array>
 
 namespace nebula
@@ -13,7 +10,7 @@ namespace drivers
 {
 namespace vlp16
 {
-  constexpr uint32_t MAX_POINTS = 300000;
+constexpr uint32_t MAX_POINTS = 300000;
 /// @brief Velodyne LiDAR decoder (VLP16)
 class Vlp16Decoder : public VelodyneScanDecoder
 {
@@ -26,7 +23,7 @@ public:
     const std::shared_ptr<drivers::VelodyneCalibrationConfiguration> & calibration_configuration);
   /// @brief Parsing and shaping VelodynePacket
   /// @param velodyne_packet
-  void unpack(const velodyne_msgs::msg::VelodynePacket & velodyne_packet) override;
+  void unpack(const nebula_msgs::msg::RawPacketStamped & velodyne_packet) override;
   /// @brief Get the flag indicating whether one cycle is ready
   /// @return Readied
   bool hasScanned() override;
@@ -46,7 +43,7 @@ private:
   /// @brief Parsing VelodynePacket based on packet structure
   /// @param velodyne_packet
   /// @return Resulting flag
-  bool parsePacket(const velodyne_msgs::msg::VelodynePacket & velodyne_packet) override;
+  bool parsePacket(const nebula_msgs::msg::RawPacketStamped & velodyne_packet) override;
   float sin_rot_table_[ROTATION_MAX_UNITS];
   float cos_rot_table_[ROTATION_MAX_UNITS];
   float rotation_radians_[ROTATION_MAX_UNITS];

@@ -15,7 +15,7 @@ RobosenseHwMonitorRosWrapper::RobosenseHwMonitorRosWrapper(const rclcpp::NodeOpt
     return;
   }
 
-  robosense_info_sub_ = create_subscription<robosense_msgs::msg::RobosenseInfoPacket>(
+  robosense_info_sub_ = create_subscription<nebula_msgs::msg::RawPacketArray>(
     "robosense_difop_packets", rclcpp::SensorDataQoS(),
     std::bind(&RobosenseHwMonitorRosWrapper::ReceiveInfoMsgCallback, this, std::placeholders::_1));
 
@@ -145,32 +145,16 @@ rcl_interfaces::msg::SetParametersResult RobosenseHwMonitorRosWrapper::paramCall
 }
 
 void RobosenseHwMonitorRosWrapper::ReceiveInfoMsgCallback(
-  const robosense_msgs::msg::RobosenseInfoPacket::SharedPtr info_msg)
+  const nebula_msgs::msg::RawPacketArray::SharedPtr info_msg)
 {
   if (!info_driver_) {
     auto sensor_cfg_ptr =
       std::make_shared<drivers::RobosenseSensorConfiguration>(sensor_configuration_);
 
-    if (sensor_cfg_ptr->sensor_model == drivers::SensorModel::ROBOSENSE_BPEARL) {
-      if (
-        drivers::SensorModelFromString(info_msg->lidar_model) ==
-        drivers::SensorModel::ROBOSENSE_BPEARL_V3) {
-        sensor_cfg_ptr->sensor_model = drivers::SensorModel::ROBOSENSE_BPEARL_V3;
-      } else if (
-        drivers::SensorModelFromString(info_msg->lidar_model) ==
-        drivers::SensorModel::ROBOSENSE_BPEARL_V4) {
-        sensor_cfg_ptr->sensor_model = drivers::SensorModel::ROBOSENSE_BPEARL_V4;
-      } else {
-        RCLCPP_ERROR_STREAM(this->get_logger(), "No version for Bpearl.");
-        return;
-      }
-    }
-
     info_driver_ = std::make_unique<drivers::RobosenseInfoDriver>(sensor_cfg_ptr);
   }
 
-  info_packet_buffer_ =
-    std::vector<uint8_t>(info_msg->packet.data.begin(), info_msg->packet.data.end());
+  info_packet_buffer_ = std::vector<uint8_t>(info_msg->packets.back().packet.data);
 
   if (!hardware_id_.has_value()) {
     info_driver_->DecodeInfoPacket(info_packet_buffer_);

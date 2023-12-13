@@ -8,6 +8,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <string>

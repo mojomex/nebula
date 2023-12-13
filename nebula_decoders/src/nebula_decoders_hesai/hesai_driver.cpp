@@ -73,7 +73,7 @@ HesaiDriver::HesaiDriver(
 }
 
 std::tuple<drivers::NebulaPointCloudPtr, double> HesaiDriver::ConvertScanToPointcloud(
-  const std::shared_ptr<pandar_msgs::msg::PandarScan> & pandar_scan)
+  const std::shared_ptr<nebula_msgs::msg::RawPacketArray> & pandar_scan)
 {
   std::tuple<drivers::NebulaPointCloudPtr, double> pointcloud;
   auto logger = rclcpp::get_logger("HesaiDriver");

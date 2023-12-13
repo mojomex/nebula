@@ -12,9 +12,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
-#include <velodyne_msgs/msg/velodyne_packet.hpp>
-#include <velodyne_msgs/msg/velodyne_scan.hpp>
-
 namespace nebula
 {
 namespace ros
@@ -24,7 +21,7 @@ class VelodyneDriverRosWrapper final : public rclcpp::Node, NebulaDriverRosWrapp
 {
   std::shared_ptr<drivers::VelodyneDriver> driver_ptr_;
   Status wrapper_status_;
-  rclcpp::Subscription<velodyne_msgs::msg::VelodyneScan>::SharedPtr velodyne_scan_sub_;
+  rclcpp::Subscription<nebula_msgs::msg::RawPacketArray>::SharedPtr velodyne_scan_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr nebula_points_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_ex_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_base_pub_;
@@ -71,7 +68,7 @@ public:
 
   /// @brief Callback for VelodyneScan subscriber
   /// @param scan_msg Received VelodyneScan
-  void ReceiveScanMsgCallback(const velodyne_msgs::msg::VelodyneScan::SharedPtr scan_msg);
+  void ReceiveScanMsgCallback(const nebula_msgs::msg::RawPacketArray::SharedPtr scan_msg);
   /// @brief Get current status of this driver
   /// @return Current status
   Status GetStatus();

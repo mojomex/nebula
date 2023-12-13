@@ -8,9 +8,6 @@
 #include "nebula_decoders/nebula_decoders_common/nebula_driver_base.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/hesai_decoder.hpp"
 
-#include "pandar_msgs/msg/pandar_packet.hpp"
-#include "pandar_msgs/msg/pandar_scan.hpp"
-
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <iostream>
@@ -55,7 +52,7 @@ public:
   /// @param pandar_scan Message
   /// @return tuple of Point cloud and timestamp
   std::tuple<drivers::NebulaPointCloudPtr, double> ConvertScanToPointcloud(
-    const std::shared_ptr<pandar_msgs::msg::PandarScan> & pandar_scan);
+    const std::shared_ptr<nebula_msgs::msg::RawPacketArray> & pandar_scan);
 };
 
 }  // namespace drivers

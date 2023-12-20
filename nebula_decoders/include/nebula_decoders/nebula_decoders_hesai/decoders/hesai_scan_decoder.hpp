@@ -4,6 +4,8 @@
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/point_types.hpp"
 
+#include "nebula_msgs/msg/raw_packet_stamped.hpp"
+
 #include <tuple>
 
 namespace nebula

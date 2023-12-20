@@ -37,6 +37,7 @@ include_directories(
 
 ament_auto_add_library(nebula_common SHARED
         src/nebula_common.cpp
+        src/nebula_message_conversions.cpp
         src/velodyne/velodyne_calibration_decoder.cpp
         )
 

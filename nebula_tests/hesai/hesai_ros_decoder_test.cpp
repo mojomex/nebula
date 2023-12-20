@@ -290,8 +290,9 @@ void HesaiRosDecoderTest::ReadBag(
         get_logger(),
         "Found data in topic " << bag_message->topic_name << ": " << bag_message->time_stamp);
 
-      auto extracted_msg_ptr = std::make_shared<pandar_msgs::msg::PandarScan>(extracted_msg);
-      auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(extracted_msg_ptr);
+      auto nebula_msg = nebula::legacy_support::legacy_to_nebula_msg(extracted_msg);
+      auto nebula_msg_ptr = std::make_shared<nebula_msgs::msg::RawPacketArray>(nebula_msg);
+      auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(nebula_msg_ptr);
       auto scan_timestamp = std::get<1>(pointcloud_ts);
       pointcloud = std::get<0>(pointcloud_ts);
 

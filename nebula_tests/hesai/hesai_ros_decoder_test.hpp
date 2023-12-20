@@ -3,6 +3,7 @@
 #include "hesai_common.hpp"
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/nebula_common.hpp"
+#include "nebula_common/nebula_message_conversions.hpp"
 #include "nebula_common/nebula_status.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
 #include "nebula_ros/common/nebula_driver_ros_wrapper_base.hpp"
@@ -11,6 +12,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 #include "pandar_msgs/msg/pandar_packet.hpp"
 #include "pandar_msgs/msg/pandar_scan.hpp"
 
@@ -108,7 +110,8 @@ public:
 
   /// @brief Read the specified bag file and compare the constructed point clouds with the
   /// corresponding PCD files
-  void ReadBag(std::function<void(uint64_t, uint64_t, nebula::drivers::NebulaPointCloudPtr)> scan_callback);
+  void ReadBag(
+    std::function<void(uint64_t, uint64_t, nebula::drivers::NebulaPointCloudPtr)> scan_callback);
 
   HesaiRosDecoderTestParams params_;
 };

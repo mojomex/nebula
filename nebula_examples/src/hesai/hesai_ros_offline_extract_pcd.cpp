@@ -92,7 +92,10 @@ Status HesaiRosOfflineExtractSample::InitializeDriver(
   return driver_ptr_->GetStatus();
 }
 
-Status HesaiRosOfflineExtractSample::GetStatus() {return wrapper_status_;}
+Status HesaiRosOfflineExtractSample::GetStatus()
+{
+  return wrapper_status_;
+}
 
 Status HesaiRosOfflineExtractSample::GetParameters(
   drivers::HesaiSensorConfiguration & sensor_configuration,
@@ -119,7 +122,7 @@ Status HesaiRosOfflineExtractSample::GetParameters(
     sensor_configuration.return_mode =
       //      nebula::drivers::ReturnModeFromString(this->get_parameter("return_mode").as_string());
       nebula::drivers::ReturnModeFromStringHesai(
-      this->get_parameter("return_mode").as_string(), sensor_configuration.sensor_model);
+        this->get_parameter("return_mode").as_string(), sensor_configuration.sensor_model);
   }
   {
     rcl_interfaces::msg::ParameterDescriptor descriptor;
@@ -296,8 +299,10 @@ Status HesaiRosOfflineExtractSample::ReadBag()
         //        nebula::drivers::NebulaPointCloudPtr pointcloud =
         //        driver_ptr_->ConvertScanToPointcloud(
         //          std::make_shared<pandar_msgs::msg::PandarScan>(extracted_msg));
-        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(
-          std::make_shared<pandar_msgs::msg::PandarScan>(extracted_msg));
+
+        auto nebula_msg = nebula::legacy_support::legacy_to_nebula_msg(extracted_msg);
+        auto nebula_msg_ptr = std::make_shared<nebula_msgs::msg::RawPacketArray>(nebula_msg);
+        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(nebula_msg_ptr);
         auto pointcloud = std::get<0>(pointcloud_ts);
         auto fn = std::to_string(bag_message->time_stamp) + ".pcd";
         //        pcl::io::savePCDFileBinary((o_dir / fn).string(), *pointcloud);

@@ -57,7 +57,10 @@ Status VelodyneRosDecoderTest::InitializeDriver(
   return driver_ptr_->GetStatus();
 }
 
-Status VelodyneRosDecoderTest::GetStatus() { return wrapper_status_; }
+Status VelodyneRosDecoderTest::GetStatus()
+{
+  return wrapper_status_;
+}
 
 Status VelodyneRosDecoderTest::GetParameters(
   drivers::VelodyneSensorConfiguration & sensor_configuration,
@@ -336,8 +339,9 @@ void VelodyneRosDecoderTest::ReadBag()
         std::cout << "Found data in topic " << bag_message->topic_name << ": "
                   << bag_message->time_stamp << std::endl;
 
-        auto extracted_msg_ptr = std::make_shared<velodyne_msgs::msg::VelodyneScan>(extracted_msg);
-        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(extracted_msg_ptr);
+        auto nebula_msg = nebula::legacy_support::legacy_to_nebula_msg(extracted_msg);
+        auto nebula_msg_ptr = std::make_shared<nebula_msgs::msg::RawPacketArray>(nebula_msg);
+        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(nebula_msg_ptr);
         pointcloud = std::get<0>(pointcloud_ts);
 
         // There are very rare cases where has_scanned_ does not become true, but it is not known

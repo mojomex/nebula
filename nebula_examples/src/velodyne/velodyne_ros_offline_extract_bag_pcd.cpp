@@ -56,7 +56,10 @@ Status VelodyneRosOfflineExtractBag::InitializeDriver(
   return driver_ptr_->GetStatus();
 }
 
-Status VelodyneRosOfflineExtractBag::GetStatus() {return wrapper_status_;}
+Status VelodyneRosOfflineExtractBag::GetStatus()
+{
+  return wrapper_status_;
+}
 
 Status VelodyneRosOfflineExtractBag::GetParameters(
   drivers::VelodyneSensorConfiguration & sensor_configuration,
@@ -338,8 +341,9 @@ Status VelodyneRosOfflineExtractBag::ReadBag()
         //        nebula::drivers::NebulaPointCloudPtr pointcloud =
         //        driver_ptr_->ConvertScanToPointcloud(
         //          std::make_shared<velodyne_msgs::msg::VelodyneScan>(extracted_msg));
-        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(
-          std::make_shared<velodyne_msgs::msg::VelodyneScan>(extracted_msg));
+        auto nebula_msg = nebula::legacy_support::legacy_to_nebula_msg(extracted_msg);
+        auto nebula_msg_ptr = std::make_shared<nebula_msgs::msg::RawPacketArray>(nebula_msg);
+        auto pointcloud_ts = driver_ptr_->ConvertScanToPointcloud(nebula_msg_ptr);
         auto pointcloud = std::get<0>(pointcloud_ts);
         auto fn = std::to_string(bag_message->time_stamp) + ".pcd";
 
@@ -352,7 +356,7 @@ Status VelodyneRosOfflineExtractBag::ReadBag()
           writer_->open(storage_options_w, converter_options_w);
           writer_->create_topic(
             {bag_message->topic_name, "velodyne_msgs/msg/VelodyneScan",
-              rmw_get_serialization_format(), ""});
+             rmw_get_serialization_format(), ""});
           needs_open = false;
         }
         writer_->write(bag_message);

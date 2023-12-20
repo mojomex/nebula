@@ -16,6 +16,7 @@
 #define NEBULA_VelodyneRosOfflineExtractBag_H
 
 #include "nebula_common/nebula_common.hpp"
+#include "nebula_common/nebula_message_conversions.hpp"
 #include "nebula_common/nebula_status.hpp"
 #include "nebula_common/velodyne/velodyne_calibration_decoder.hpp"
 #include "nebula_common/velodyne/velodyne_common.hpp"
@@ -35,12 +36,12 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include "nebula_msgs/msg/raw_packet_array.hpp"
 #include <velodyne_msgs/msg/velodyne_packet.hpp>
 #include <velodyne_msgs/msg/velodyne_scan.hpp>
 
-#include <regex>
-
 #include <memory>
+#include <regex>
 #include <string>
 
 namespace nebula

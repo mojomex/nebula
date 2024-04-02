@@ -58,8 +58,7 @@
             <composable_node pkg="nebula_ros"
                              plugin="HesaiHwInterfaceRosWrapper"
                              name="PandarHw"
-                             namespace="/"
-                             output="screen">
+                             namespace="/">
                 <param name="sensor_model" value="$(var sensor_model)"/>
                 <param name="return_mode" value="$(var return_mode)"/>
                 <param name="frame_id" value="$(var frame_id)"/>
@@ -88,8 +87,7 @@
             <composable_node pkg="nebula_ros" 
                             plugin="HesaiHwMonitorRosWrapper"
                             name="PandarMon" 
-                            namespace="/"
-                            output="screen">
+                            namespace="/">
                 <param name="sensor_model" value="$(var sensor_model)"/>
                 <param name="return_mode" value="$(var return_mode)"/>
                 <param name="frame_id" value="$(var frame_id)"/>

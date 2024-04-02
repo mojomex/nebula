@@ -7,6 +7,8 @@ namespace ros
 HesaiHwMonitorRosWrapper::HesaiHwMonitorRosWrapper(const rclcpp::NodeOptions & options)
 : rclcpp::Node("hesai_hw_monitor_ros_wrapper", options), hw_interface_(), diagnostics_updater_(this)
 {
+  this->get_logger().set_level(rclcpp::Logger::Level::Debug);
+
   cbg_r_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
   cbg_m_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   cbg_m2_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -63,15 +65,17 @@ HesaiHwMonitorRosWrapper::HesaiHwMonitorRosWrapper(const rclcpp::NodeOptions & o
     std::static_pointer_cast<drivers::SensorConfigurationBase>(sensor_cfg_ptr));
   while(hw_interface_.InitializeTcpDriver() == Status::ERROR_1)
   {
+    RCLCPP_WARN(this->get_logger(), "Could not initialize TCP driver, retrying in 8s...");
     std::this_thread::sleep_for(std::chrono::milliseconds(8000));// >5000
+    RCLCPP_INFO(this->get_logger(), "Retrying TCP driver initialization");
   }
   std::vector<std::thread> thread_pool{};
   thread_pool.emplace_back([this] {
     auto result = hw_interface_.GetInventory();
     current_inventory.reset(new HesaiInventory(result));
     current_inventory_time.reset(new rclcpp::Time(this->get_clock()->now()));
-    std::cout << "HesaiInventory" << std::endl;
-    std::cout << result << std::endl;
+    RCLCPP_INFO_STREAM(this->get_logger(), "HesaiInventory");
+    RCLCPP_INFO_STREAM(this->get_logger(), result);
     info_model = result.get_str_model();
     info_serial = std::string(result.sn.begin(), result.sn.end());
     hw_interface_.SetTargetModel(result.model);

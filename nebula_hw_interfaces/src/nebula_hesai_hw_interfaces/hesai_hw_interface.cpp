@@ -9,6 +9,8 @@
 
 #include <boost/asio.hpp>
 
+#include <ctime>
+
 namespace nebula
 {
 namespace drivers
@@ -243,6 +245,28 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
   pandar_packet.stamp.nanosec = static_cast<std::uint32_t>(now_nanosecs % 1'000'000'000);
   scan_cloud_ptr_->packets.emplace_back(pandar_packet);
 
+  if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDAR128_E4X) {
+    size_t DATETIME_OFFSET = 6 + 6 + (384 + 2) * 2 + 4 + 17 + 15;
+    size_t TIMESTMAP_OFFSET = DATETIME_OFFSET + 6;
+
+    std::tm tm{};
+    tm.tm_year = buffer[DATETIME_OFFSET + 0];
+    tm.tm_mon = buffer[DATETIME_OFFSET + 1] - 1;  // starts from 0 in C
+    tm.tm_mday = buffer[DATETIME_OFFSET + 2];
+    tm.tm_hour = buffer[DATETIME_OFFSET + 3];
+    tm.tm_min = buffer[DATETIME_OFFSET + 4];
+    tm.tm_sec = buffer[DATETIME_OFFSET + 5];
+    auto time = timegm(&tm);
+
+    uint32_t time_us;
+    memcpy(&time_us, &buffer[TIMESTMAP_OFFSET], 4);
+
+    uint64_t pkt_ns = static_cast<uint64_t>(time) * 1'000'000'000ULL + static_cast<uint64_t>(time_us) * 1'000ULL;
+    uint64_t now_ns = now_nanosecs;
+
+    RCLCPP_INFO_STREAM(*parent_node_logger, "#REC " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+  }
+
   int current_phase = 0;
   bool comp_flg = false;
 
@@ -268,6 +292,31 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
   if (comp_flg) {  // Scan complete
     if (scan_reception_callback_) {
       scan_cloud_ptr_->header.stamp = scan_cloud_ptr_->packets.front().stamp;
+
+      if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDAR128_E4X) {
+        size_t DATETIME_OFFSET = 6 + 6 + (384 + 2) * 2 + 4 + 17 + 15;
+        size_t TIMESTMAP_OFFSET = DATETIME_OFFSET + 6;
+
+        auto & pkt1 = scan_cloud_ptr_->packets[0].data;
+
+        std::tm tm{};
+        tm.tm_year = pkt1[DATETIME_OFFSET + 0];
+        tm.tm_mon = pkt1[DATETIME_OFFSET + 1] - 1;  // starts from 0 in C
+        tm.tm_mday = pkt1[DATETIME_OFFSET + 2];
+        tm.tm_hour = pkt1[DATETIME_OFFSET + 3];
+        tm.tm_min = pkt1[DATETIME_OFFSET + 4];
+        tm.tm_sec = pkt1[DATETIME_OFFSET + 5];
+        auto time = timegm(&tm);
+
+        uint32_t time_us;
+        memcpy(&time_us, &pkt1[TIMESTMAP_OFFSET], 4);
+
+        uint64_t pkt_ns = static_cast<uint64_t>(time) * 1'000'000'000ULL + static_cast<uint64_t>(time_us) * 1'000ULL;
+        uint64_t now_ns = now_nanosecs;
+
+        RCLCPP_INFO_STREAM(*parent_node_logger, "#SCA " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+      }
+
       // Callback
       scan_reception_callback_(std::move(scan_cloud_ptr_));
       scan_cloud_ptr_ = std::make_unique<pandar_msgs::msg::PandarScan>();

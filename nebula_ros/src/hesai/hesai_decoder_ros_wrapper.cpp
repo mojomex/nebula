@@ -60,6 +60,29 @@ void HesaiDriverRosWrapper::ReceiveScanMsgCallback(
   const pandar_msgs::msg::PandarScan::SharedPtr scan_msg)
 {
   auto t_start = std::chrono::high_resolution_clock::now();
+
+  size_t DATETIME_OFFSET = 6 + 6 + (384 + 2) * 2 + 4 + 17 + 15;
+  size_t TIMESTMAP_OFFSET = DATETIME_OFFSET + 6;
+
+  auto & buffer = scan_msg->packets[0].data;
+
+  std::tm tm{};
+  tm.tm_year = buffer[DATETIME_OFFSET + 0];
+  tm.tm_mon = buffer[DATETIME_OFFSET + 1] - 1;  // starts from 0 in C
+  tm.tm_mday = buffer[DATETIME_OFFSET + 2];
+  tm.tm_hour = buffer[DATETIME_OFFSET + 3];
+  tm.tm_min = buffer[DATETIME_OFFSET + 4];
+  tm.tm_sec = buffer[DATETIME_OFFSET + 5];
+  auto time = timegm(&tm);
+
+  uint32_t time_us;
+  memcpy(&time_us, &buffer[TIMESTMAP_OFFSET], 4);
+
+  uint64_t pkt_ns = static_cast<uint64_t>(time) * 1'000'000'000ULL + static_cast<uint64_t>(time_us) * 1'000ULL;
+  uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t_start.time_since_epoch()).count();
+
+  RCLCPP_INFO_STREAM(get_logger(), "#DEs " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+
   std::tuple<nebula::drivers::NebulaPointCloudPtr, double> pointcloud_ts =
     driver_ptr_->ConvertScanToPointcloud(scan_msg);
   nebula::drivers::NebulaPointCloudPtr pointcloud = std::get<0>(pointcloud_ts);
@@ -101,6 +124,9 @@ void HesaiDriverRosWrapper::ReceiveScanMsgCallback(
   }
 
   auto runtime = std::chrono::high_resolution_clock::now() - t_start;
+  now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+  RCLCPP_INFO_STREAM(get_logger(), "#DEe " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+
   RCLCPP_DEBUG(get_logger(), "PROFILING {'d_total': %lu, 'n_out': %lu}", runtime.count(), pointcloud->size());
 }
 

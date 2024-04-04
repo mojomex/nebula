@@ -17,5 +17,11 @@ with open(args.log_file, 'r') as f:
   lines = [(m[1], float(m[2])) for m in lines]
   df = pd.DataFrame(lines, columns=["tag", 'dt'])
 
-print(df.groupby("tag").describe([.5, .6, .7, .8, .9, .95, .99, .999, 1 - 1e-5]))
+len_before_filter = len(df)
+df = df[df['dt'] < 1e5]
+
+if len(df) != len_before_filter:
+  print(f"[WARN] Filtered out {len_before_filter - len(df)} corrupt entries")
+
+print(df.groupby("tag").describe([.5, .9, .99, .999]))
  

@@ -13,6 +13,9 @@ log/
 
 # profiling
 profiling_output/
+*.pcap
+*.log
+*.png
 
 # Python
 srv/_*.py

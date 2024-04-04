@@ -112,4 +112,13 @@
         </load_composable_node>
     </group>
 
+    <load_composable_node target="PandarContainer">
+        <composable_node pkg="topic_delay" 
+                         plugin="TopicDelay"
+                         name="TopicDelay" 
+                         namespace="/">
+            <extra_arg name="use_intra_process_comms" value="true" />
+        </composable_node>
+    </load_composable_node>
+
 </launch>

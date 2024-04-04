@@ -228,11 +228,21 @@ Status HesaiHwInterface::RegisterScanCallback(
 
 void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & buffer)
 {
+  static nebula::util::Instrumentation receive{"ReceiveSensorPacketCallback.receive"};
+  static nebula::util::Instrumentation accumulate{"ReceiveSensorPacketCallback.accumulate"};
+  static nebula::util::Instrumentation callback{"ReceiveSensorPacketCallback.callback"};
+  static uint64_t i = 0;
+
+  i++;
+
   int scan_phase = static_cast<int>(sensor_configuration_->scan_phase * 100.0);
   if (!is_valid_packet_(buffer.size())) {
     PrintDebug("Invalid Packet: " + std::to_string(buffer.size()));
     return;
   }
+
+  receive.tick();
+
   const uint32_t buffer_size = buffer.size();
   pandar_msgs::msg::PandarPacket pandar_packet;
   std::copy_n(std::make_move_iterator(buffer.begin()), buffer_size, pandar_packet.data.begin());
@@ -243,6 +253,10 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
     std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
   pandar_packet.stamp.sec = static_cast<int>(now_secs);
   pandar_packet.stamp.nanosec = static_cast<std::uint32_t>(now_nanosecs % 1'000'000'000);
+
+  receive.tock();
+  accumulate.tick();
+
   scan_cloud_ptr_->packets.emplace_back(pandar_packet);
 
   if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDAR128_E4X) {
@@ -264,7 +278,9 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
     uint64_t pkt_ns = static_cast<uint64_t>(time) * 1'000'000'000ULL + static_cast<uint64_t>(time_us) * 1'000ULL;
     uint64_t now_ns = now_nanosecs;
 
-    RCLCPP_INFO_STREAM(*parent_node_logger, "#REC " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+    if (i % 1000 == 0) {
+      RCLCPP_INFO_STREAM(*parent_node_logger, "#REC " << std::fixed << std::setw(10) << std::setprecision(6) << (now_ns - pkt_ns) / 1'000'000. << "ms");
+    }
   }
 
   int current_phase = 0;
@@ -289,7 +305,10 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
     }
   }
 
+  accumulate.tock();
+
   if (comp_flg) {  // Scan complete
+    callback.tick();
     if (scan_reception_callback_) {
       scan_cloud_ptr_->header.stamp = scan_cloud_ptr_->packets.front().stamp;
 
@@ -321,6 +340,7 @@ void HesaiHwInterface::ReceiveSensorPacketCallback(const std::vector<uint8_t> & 
       scan_reception_callback_(std::move(scan_cloud_ptr_));
       scan_cloud_ptr_ = std::make_unique<pandar_msgs::msg::PandarScan>();
     }
+    callback.tock();
   }
 }
 Status HesaiHwInterface::SensorInterfaceStop()

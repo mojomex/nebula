@@ -59,6 +59,11 @@ HesaiDriverRosWrapper::HesaiDriverRosWrapper(const rclcpp::NodeOptions & options
 void HesaiDriverRosWrapper::ReceiveScanMsgCallback(
   const pandar_msgs::msg::PandarScan::SharedPtr scan_msg)
 {
+  static nebula::util::Instrumentation decode{"ReceiveScanMsgCallback.decode"};
+  static nebula::util::Instrumentation convert{"ReceiveScanMsgCallback.convert"};
+
+  decode.tick();
+
   auto t_start = std::chrono::high_resolution_clock::now();
 
   size_t DATETIME_OFFSET = 6 + 6 + (384 + 2) * 2 + 4 + 17 + 15;
@@ -87,10 +92,16 @@ void HesaiDriverRosWrapper::ReceiveScanMsgCallback(
     driver_ptr_->ConvertScanToPointcloud(scan_msg);
   nebula::drivers::NebulaPointCloudPtr pointcloud = std::get<0>(pointcloud_ts);
 
+
+  decode.tock();
+
   if (pointcloud == nullptr) {
     RCLCPP_WARN_STREAM(get_logger(), "Empty cloud parsed.");
     return;
   };
+
+  convert.tick();
+
   if (
     nebula_points_pub_->get_subscription_count() > 0 ||
     nebula_points_pub_->get_intra_process_subscription_count() > 0) {
@@ -122,6 +133,8 @@ void HesaiDriverRosWrapper::ReceiveScanMsgCallback(
       rclcpp::Time(SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count());
     PublishCloud(std::move(ros_pc_msg_ptr), aw_points_ex_pub_);
   }
+
+  convert.tock();
 
   auto runtime = std::chrono::high_resolution_clock::now() - t_start;
   now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();

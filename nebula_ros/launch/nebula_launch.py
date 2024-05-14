@@ -43,8 +43,8 @@ def launch_setup(context, *args, **kwargs):
     calibration_file = LaunchConfiguration("calibration_file").perform(context)
     sensor_make, sensor_extension = get_sensor_make(sensor_model)
 
-    if sensor_make.lower() == "hesai":
-        raise ValueError("\n  `nebula_launch.py` is deprecated. For Hesai sensors, use `hesai_launch_all_hw.xml` instead.")
+    if sensor_make.lower() in ["hesai", "robosense"]:
+        raise ValueError(f"\n  `nebula_launch.py` is deprecated. For {sensor_make} sensors, use `{sensor_make.lower()}_launch_all_hw.xml` instead.")
 
     nebula_decoders_share_dir = get_package_share_directory("nebula_decoders")
     nebula_ros_share_dir = get_package_share_directory("nebula_ros")

@@ -7,6 +7,7 @@
 #include "nebula_ros/hesai/hw_monitor/http_lidar_monitpr_provider.hpp"
 #include "nebula_ros/hesai/hw_monitor/tcp_lidar_monitor_provider.hpp"
 #include "nebula_ros/hesai/hw_monitor/tcp_lidar_status_provider.hpp"
+#include "nebula_ros/hesai/hw_monitor/tcp_fault_mode_info_provider.hpp"
 
 #include <nebula_common/nebula_common.hpp>
 
@@ -83,6 +84,9 @@ HesaiHwMonitorWrapper::getDiagnosticProviders(drivers::SensorModel sensor_model)
   result.push_back(status_provider);
 
   if (sensor_model == drivers::SensorModel::HESAI_PANDARAT128) {
+    auto fault_info_provider = std::make_shared<hw_monitor::TcpFaultModeInfoProvider>();
+    result.push_back(fault_info_provider);
+
     return result;
   }
 

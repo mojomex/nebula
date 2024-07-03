@@ -451,6 +451,10 @@ Status HesaiHwInterface::SetControlPort(
 
 Status HesaiHwInterface::SetLidarRange(int method, std::vector<unsigned char> data)
 {
+  if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDARAT128) {
+    return Status::OK;
+  }
+
   // 0 - for all channels : 5-1 bytes
   // 1 - for each channel : 323-1 bytes
   // 2 - multi-section FOV : 1347-1 bytes
@@ -465,6 +469,10 @@ Status HesaiHwInterface::SetLidarRange(int method, std::vector<unsigned char> da
 
 Status HesaiHwInterface::SetLidarRange(int start, int end)
 {
+  if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDARAT128) {
+    return Status::OK;
+  }
+
   // 0 - for all channels : 5-1 bytes
   // 1 - for each channel : 323-1 bytes
   // 2 - multi-section FOV : 1347-1 bytes
@@ -483,6 +491,10 @@ Status HesaiHwInterface::SetLidarRange(int start, int end)
 
 HesaiLidarRangeAll HesaiHwInterface::GetLidarRange()
 {
+  if (sensor_configuration_->sensor_model == SensorModel::HESAI_PANDARAT128) {
+    return HesaiLidarRangeAll();
+  }
+
   auto response_or_err = SendReceive(PTC_COMMAND_GET_LIDAR_RANGE);
   auto response = response_or_err.value_or_throw(PrettyPrintPTCError(response_or_err.error_or({})));
 
@@ -1295,9 +1307,14 @@ template <typename T>
 T HesaiHwInterface::CheckSizeAndParse(const std::vector<uint8_t> & data)
 {
   if (data.size() < sizeof(T)) {
-    throw std::runtime_error("Attempted to parse too-small payload");
+    std::stringstream ss{};
+    ss << "Attempted to parse too-small payload: expected " << sizeof(T) << ", got " << data.size();
+    throw std::runtime_error(ss.str());
   } else if (data.size() > sizeof(T)) {
-    PrintError("Sensor returned longer payload than expected. Will parse anyway.");
+    std::stringstream ss{};
+    ss << "Sensor returned too-large payload: expected " << sizeof(T) << ", got " << data.size()
+       << ". Will parse anyway.";
+    PrintError(ss.str());
   }
 
   T parsed;

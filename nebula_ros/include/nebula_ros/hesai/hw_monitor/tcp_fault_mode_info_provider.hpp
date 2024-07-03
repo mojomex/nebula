@@ -62,7 +62,12 @@ private:
     diagnostics.add("operation_mode", current_data_->describeWorkMode());
     diagnostics.add("faults", current_data_->describeFaultCode());
 
-    diagnostics.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "");
+    if (current_data_->ok()) {
+      diagnostics.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "");
+      return;
+    }
+
+    diagnostics.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR, "");
   }
 
   std::unique_ptr<HesaiFaultModeInfo> current_data_;

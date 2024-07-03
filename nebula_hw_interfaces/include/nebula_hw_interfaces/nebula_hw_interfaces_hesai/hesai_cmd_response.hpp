@@ -354,9 +354,9 @@ struct HesaiLidarStatus
   big_uint32_buf_t system_uptime;
   big_uint16_buf_t motor_speed;
   big_int32_buf_t temperature[8];
-  uint8_t gps_pps_lock;
-  uint8_t gps_gprmc_status;
-  big_uint32_buf_t startup_times;
+  uint8_t gps_pps_lock;//wrong
+  uint8_t gps_gprmc_status;//wrong
+  big_uint32_buf_t startup_times;//wrong
   big_uint32_buf_t total_operation_time;
   uint8_t ptp_clock_status;
   uint8_t reserved[5];  // FIXME: 4 bytes labeled as humidity in OT128 datasheet
@@ -528,22 +528,22 @@ struct HesaiLidarMonitor
 
 struct HesaiFaultModeInfo
 {
-  char work_mode;
-  char fault_code[4];
+  uint8_t work_mode;
+  uint8_t fault_code;
 
   [[nodiscard]] std::string describeWorkMode() const
   {
-    std::string prefix = std::string(&work_mode, 1) + " - ";
+    std::string prefix = std::to_string(work_mode) + " - ";
     switch (work_mode) {
-      case '0':
+      case 0:
         return prefix + "Energy-Saving";
-      case '1':
+      case 1:
         return prefix + "Standard";
-      case '2':
+      case 2:
         return prefix + "Standby";
-      case '3':
+      case 3:
         return prefix + "High-Temp-Shutdown";
-      case '4':
+      case 4:
         return prefix + "Other-Shutdown";
     }
 
@@ -552,9 +552,6 @@ struct HesaiFaultModeInfo
 
   [[nodiscard]] std::string describeFaultCode() const
   {
-    std::string hex = std::string(fault_code, sizeof(fault_code));
-    uint8_t fault_code = std::stoul(hex, nullptr, 16);
-
     std::bitset<8> bits{fault_code};
     std::vector<std::string> fault_messages;
 
@@ -582,13 +579,16 @@ struct HesaiFaultModeInfo
       return "OK";
     }
 
-    return "Fault code " + hex + ": " + boost::join(fault_messages, ", ");
+    std::stringstream ss;
+    ss << "0x" << std::hex << std::setfill('0') << std::setw(2) << fault_code;
+
+    return "Fault code " + ss.str() + ": " + boost::join(fault_messages, ", ");
   }
 
   bool ok()
   {
-    bool work_mode_ok = work_mode != '3' && work_mode != '4';
-    bool fault_code_ok = std::strncmp(fault_code, "0x00", sizeof(fault_code));
+    bool work_mode_ok = work_mode < 3;
+    bool fault_code_ok = fault_code == 0;
     return work_mode_ok && fault_code_ok;
   }
 

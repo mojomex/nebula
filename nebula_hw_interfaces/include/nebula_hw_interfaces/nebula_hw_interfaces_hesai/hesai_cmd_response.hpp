@@ -20,9 +20,13 @@
 #include <boost/format.hpp>
 
 #include <array>
+#include <bitset>
 #include <cstdint>
+#include <cstring>
+#include <iomanip>
 #include <ostream>
 #include <string>
+#include <vector>
 
 using namespace boost::endian;  // NOLINT(build/namespaces)
 
@@ -217,7 +221,7 @@ struct HesaiInventory
     return os;
   }
 
-  std::string get_str_model()
+  [[nodiscard]] std::string get_str_model() const
   {
     switch (model) {
       case 0:
@@ -399,7 +403,7 @@ struct HesaiLidarStatus
     return os;
   }
 
-  std::string get_str_gps_pps_lock()
+  [[nodiscard]] std::string get_str_gps_pps_lock() const
   {
     switch (gps_pps_lock) {
       case 1:
@@ -410,7 +414,8 @@ struct HesaiLidarStatus
         return "Unknown";
     }
   }
-  std::string get_str_gps_gprmc_status()
+
+  [[nodiscard]] std::string get_str_gps_gprmc_status() const
   {
     switch (gps_gprmc_status) {
       case 1:
@@ -421,7 +426,8 @@ struct HesaiLidarStatus
         return "Unknown";
     }
   }
-  std::string get_str_ptp_clock_status()
+
+  [[nodiscard]] std::string get_str_ptp_clock_status() const
   {
     switch (ptp_clock_status) {
       case 0:
@@ -515,6 +521,82 @@ struct HesaiLidarMonitor
       }
       os << std::hex << std::setfill('0') << std::setw(2) << (static_cast<int>(arg.reserved[i]));
     }
+
+    return os;
+  }
+};
+
+struct HesaiFaultModeInfo
+{
+  char work_mode;
+  char fault_code[4];
+
+  [[nodiscard]] std::string describeWorkMode() const
+  {
+    std::string prefix = std::string(&work_mode, 1) + " - ";
+    switch (work_mode) {
+      case '0':
+        return prefix + "Energy-Saving";
+      case '1':
+        return prefix + "Standard";
+      case '2':
+        return prefix + "Standby";
+      case '3':
+        return prefix + "High-Temp-Shutdown";
+      case '4':
+        return prefix + "Other-Shutdown";
+    }
+
+    return prefix + "Unknown";
+  }
+
+  [[nodiscard]] std::string describeFaultCode() const
+  {
+    std::string hex = std::string(fault_code, sizeof(fault_code));
+    uint8_t fault_code = std::stoul(hex, nullptr, 16);
+
+    std::bitset<8> bits{fault_code};
+    std::vector<std::string> fault_messages;
+
+    if (bits[0]) {
+      fault_messages.emplace_back("energy-saving fault");
+    }
+
+    if (bits[4]) {
+      fault_messages.emplace_back("high-temp shutdown fault");
+    }
+
+    if (bits[5]) {
+      fault_messages.emplace_back("other shutdown fault");
+    }
+
+    // If any other fault bits are set, there are undocumented faults
+    bits.reset(0);
+    bits.reset(4);
+    bits.reset(5);
+    if (bits.any()) {
+      fault_messages.emplace_back(std::to_string(bits.count()) + " unknown faults");
+    }
+
+    if (fault_messages.empty()) {
+      return "OK";
+    }
+
+    return "Fault code " + hex + ": " + boost::join(fault_messages, ", ");
+  }
+
+  bool ok()
+  {
+    bool work_mode_ok = work_mode != '3' && work_mode != '4';
+    bool fault_code_ok = std::strncmp(fault_code, "0x00", sizeof(fault_code));
+    return work_mode_ok && fault_code_ok;
+  }
+
+  friend std::ostream & operator<<(std::ostream & os, nebula::HesaiFaultModeInfo const & arg)
+  {
+    os << "work_mode: " << arg.describeWorkMode();
+    os << ", ";
+    os << "fault_code: " << arg.describeFaultCode();
 
     return os;
   }

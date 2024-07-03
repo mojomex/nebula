@@ -2,6 +2,8 @@
 
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_hw_interface.hpp"
 
+#include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_cmd_response.hpp"
+
 // #define WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
 
 #ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
@@ -341,6 +343,13 @@ HesaiLidarStatus HesaiHwInterface::GetLidarStatus()
   auto response_or_err = SendReceive(PTC_COMMAND_GET_LIDAR_STATUS);
   auto response = response_or_err.value_or_throw(PrettyPrintPTCError(response_or_err.error_or({})));
   return CheckSizeAndParse<HesaiLidarStatus>(response);
+}
+
+HesaiFaultModeInfo HesaiHwInterface::GetFaultModeInfo()
+{
+  auto response_or_err = SendReceive(PTC_COMMAND_GET_FAULT_MODE_INFO);
+  auto response = response_or_err.value_or_throw(PrettyPrintPTCError(response_or_err.error_or({})));
+  return CheckSizeAndParse<HesaiFaultModeInfo>(response);
 }
 
 Status HesaiHwInterface::SetSpinRate(uint16_t rpm)

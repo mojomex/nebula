@@ -75,6 +75,7 @@ const uint8_t PTC_COMMAND_GET_PTP_CONFIG = 0x26;
 const uint8_t PTC_COMMAND_RESET = 0x25;
 const uint8_t PTC_COMMAND_SET_ROTATE_DIRECTION = 0x2a;
 const uint8_t PTC_COMMAND_LIDAR_MONITOR = 0x27;
+const uint8_t PTC_COMMAND_GET_FAULT_MODE_INFO = 0x8d;
 
 const uint8_t PTC_ERROR_CODE_NO_ERROR = 0x00;
 const uint8_t PTC_ERROR_CODE_INVALID_INPUT_PARAM = 0x01;
@@ -259,6 +260,9 @@ public:
   /// @brief Getting data with PTC_COMMAND_GET_LIDAR_STATUS
   /// @return Resulting status
   HesaiLidarStatus GetLidarStatus();
+  /// @brief Getting data with PTC_COMMAND_GET_FAULT_MODE_INFO
+  /// @return Resulting status
+  HesaiFaultModeInfo GetFaultModeInfo();
   /// @brief Setting value with PTC_COMMAND_SET_SPIN_RATE
   /// @param rpm Spin rate
   /// @return Resulting status

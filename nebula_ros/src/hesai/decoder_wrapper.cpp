@@ -60,8 +60,7 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
   }
 
   auto qos_profile = rmw_qos_profile_sensor_data;
-  auto pointcloud_qos =
-    rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 10), qos_profile);
+  auto pointcloud_qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
 
   nebula_points_pub_ =
     parent_node->create_publisher<sensor_msgs::msg::PointCloud2>("pandar_points", pointcloud_qos);
@@ -78,6 +77,16 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
       RCLCPP_WARN_THROTTLE(
         logger_, *parent_node->get_clock(), 5000, "Missed pointcloud output deadline");
     });
+
+  // initialize debug tool
+  {
+    using autoware::universe_utils::DebugPublisher;
+    using autoware::universe_utils::StopWatch;
+
+    stop_watch_ptr_ = std::make_unique<StopWatch<std::chrono::milliseconds>>();
+    debug_publisher_ = std::make_unique<DebugPublisher>(this, "hesai_decoder_wrapper");
+    stop_watch_ptr_->tic("processing_time");
+  }
 }
 
 void HesaiDecoderWrapper::OnConfigChange(
@@ -221,6 +230,19 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
 void HesaiDecoderWrapper::ProcessCloudPacket(
   std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
 {
+  static bool last_call_published = false;
+  static double cumulated_processing_time_ms = 0;
+
+  if (debug_publisher_ && last_call_published) {
+    double now_stamp_seconds = rclcpp::Time(this->get_clock()->now()).seconds();
+    double cloud_stamp_seconds = rclcpp::Time(packet_msg->stamp).seconds();
+
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/start_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+  }
+
+  stop_watch_ptr_->toc("processing_time", true);
+
   // Accumulate packets for recording only if someone is subscribed to the topic (for performance)
   if (
     hw_interface_ && (packets_pub_->get_subscription_count() > 0 ||
@@ -244,6 +266,9 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     pointcloud = std::get<0>(pointcloud_ts);
   }
 
+  cumulated_processing_time_ms += stop_watch_ptr_->toc("processing_time", true);
+  last_call_published = false;
+
   // A pointcloud is only emitted when a scan completes (e.g. 3599 packets do not emit, the 3600th
   // emits one)
   if (pointcloud == nullptr) {
@@ -254,6 +279,21 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
   }
 
   cloud_watchdog_->update();
+
+  if (debug_publisher_) {
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/processing_time_ms", cumulated_processing_time_ms);
+
+    double now_stamp_seconds = rclcpp::Time(this->get_clock()->now()).seconds();
+    double cloud_stamp_seconds =
+      rclcpp::Time(SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count()).seconds();
+
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/end_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+  }
+
+  cumulated_processing_time_ms = 0;
+  last_call_published = true;
 
   // Publish scan message only if it has been written to
   if (current_scan_msg_ && !current_scan_msg_->packets.empty()) {

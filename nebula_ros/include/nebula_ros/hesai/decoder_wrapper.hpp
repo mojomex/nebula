@@ -19,6 +19,8 @@
 #include "nebula_ros/common/parameter_descriptors.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
 
+#include <autoware/universe_utils/ros/debug_publisher.hpp>
+#include <autoware/universe_utils/system/stop_watch.hpp>
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <nebula_common/nebula_common.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -27,6 +29,7 @@
 #include "pandar_msgs/msg/pandar_packet.hpp"
 #include "pandar_msgs/msg/pandar_scan.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -106,6 +109,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_ex_pub_{};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_base_pub_{};
 
+  std::unique_ptr<autoware::universe_utils::StopWatch<std::chrono::milliseconds>> stop_watch_ptr_;
+  std::unique_ptr<autoware::universe_utils::DebugPublisher> debug_publisher_;
   std::shared_ptr<WatchdogTimer> cloud_watchdog_;
 };
 }  // namespace ros

@@ -10,6 +10,8 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic -Wunused-function)
 endif ()
 
+find_package(autoware_universe_utils REQUIRED)
+find_package(tier4_debug_msgs REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
 find_package(PCL REQUIRED components common)
 find_package(continental_msgs REQUIRED)
@@ -58,12 +60,16 @@ target_include_directories(hesai_ros_wrapper PUBLIC
     ${nebula_decoders_INCLUDE_DIRS}
     ${nebula_hw_interfaces_INCLUDE_DIRS}
     ${pandar_msgs_INCLUDE_DIRS}
+    ${autoware_universe_utils_INCLUDE_DIRS}
+    ${tier4_debug_msgs_INCLUDE_DIRS}
 )
 
 target_link_libraries(hesai_ros_wrapper PUBLIC
     ${diagnostic_msgs_TARGETS}
     ${diagnostic_updater_TARGETS}
     ${pandar_msgs_TARGETS}
+    ${tier4_debug_msgs_TARGETS}
+    ${autoware_universe_utils_TARGETS}
     nebula_decoders::nebula_decoders_hesai
     nebula_hw_interfaces::nebula_hw_interfaces_hesai
 )

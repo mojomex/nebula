@@ -16,6 +16,7 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
   std::shared_ptr<const nebula::drivers::HesaiSensorConfiguration> & config)
 : status_(nebula::Status::NOT_INITIALIZED),
   logger_(parent_node->get_logger().get_child("HesaiDecoder")),
+  parent_node_(*parent_node),
   hw_interface_(hw_interface),
   sensor_cfg_(config)
 {
@@ -52,9 +53,9 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
       (std::stringstream() << "Error instantiating decoder: " << status_).str());
   }
 
+  current_scan_msg_ = std::make_unique<pandar_msgs::msg::PandarScan>();
   // Publish packets only if HW interface is connected
   if (hw_interface_) {
-    current_scan_msg_ = std::make_unique<pandar_msgs::msg::PandarScan>();
     packets_pub_ = parent_node->create_publisher<pandar_msgs::msg::PandarScan>(
       "pandar_packets", rclcpp::SensorDataQoS());
   }
@@ -84,7 +85,7 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
     using autoware::universe_utils::StopWatch;
 
     stop_watch_ptr_ = std::make_unique<StopWatch<std::chrono::milliseconds>>();
-    debug_publisher_ = std::make_unique<DebugPublisher>(this, "hesai_decoder_wrapper");
+    debug_publisher_ = std::make_unique<DebugPublisher>(parent_node, "hesai_driver_ros_wrapper");
     stop_watch_ptr_->tic("processing_time");
   }
 }
@@ -159,7 +160,7 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
     calib = std::make_shared<drivers::HesaiCalibrationConfiguration>();
   }
 
-  bool hw_connected = hw_interface_ != nullptr;
+  bool hw_connected = false; //hw_interface_ != nullptr;
   std::string calibration_file_path_from_sensor;
 
   {
@@ -230,11 +231,11 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
 void HesaiDecoderWrapper::ProcessCloudPacket(
   std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
 {
-  static bool last_call_published = false;
-  static double cumulated_processing_time_ms = 0;
+  static bool last_call_published;
+  static double cumulated_processing_time_ms;
 
-  if (debug_publisher_ && last_call_published) {
-    double now_stamp_seconds = rclcpp::Time(this->get_clock()->now()).seconds();
+  if (last_call_published) {
+    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
     double cloud_stamp_seconds = rclcpp::Time(packet_msg->stamp).seconds();
 
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
@@ -244,9 +245,7 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
   stop_watch_ptr_->toc("processing_time", true);
 
   // Accumulate packets for recording only if someone is subscribed to the topic (for performance)
-  if (
-    hw_interface_ && (packets_pub_->get_subscription_count() > 0 ||
-                      packets_pub_->get_intra_process_subscription_count() > 0)) {
+  if (hw_interface_) {
     if (current_scan_msg_->packets.size() == 0) {
       current_scan_msg_->header.stamp = packet_msg->stamp;
     }
@@ -280,23 +279,27 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
 
   cloud_watchdog_->update();
 
-  if (debug_publisher_) {
+  {
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
       "debug/processing_time_ms", cumulated_processing_time_ms);
 
-    double now_stamp_seconds = rclcpp::Time(this->get_clock()->now()).seconds();
-    double cloud_stamp_seconds =
-      rclcpp::Time(SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count()).seconds();
+    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
+    double cloud_stamp_seconds = rclcpp::Time(current_scan_msg_->header.stamp).seconds();
+    double sensor_stamp_seconds = SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count() / 1.e9;
 
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
       "debug/end_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/diff_sensor_system_ms", 1000.f * (cloud_stamp_seconds - sensor_stamp_seconds));
+    debug_publisher_->publish<tier4_debug_msgs::msg::Int64Stamped>(
+      "debug/packet_count", current_scan_msg_->packets.size());
   }
 
   cumulated_processing_time_ms = 0;
   last_call_published = true;
 
   // Publish scan message only if it has been written to
-  if (current_scan_msg_ && !current_scan_msg_->packets.empty()) {
+  if (!current_scan_msg_->packets.empty()) {
     packets_pub_->publish(std::move(current_scan_msg_));
     current_scan_msg_ = std::make_unique<pandar_msgs::msg::PandarScan>();
   }

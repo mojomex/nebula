@@ -160,7 +160,7 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
     calib = std::make_shared<drivers::HesaiCalibrationConfiguration>();
   }
 
-  bool hw_connected = false; //hw_interface_ != nullptr;
+  bool hw_connected = false;  // hw_interface_ != nullptr;
   std::string calibration_file_path_from_sensor;
 
   {
@@ -231,15 +231,12 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
 void HesaiDecoderWrapper::ProcessCloudPacket(
   std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
 {
-  static bool last_call_published;
+  static bool last_call_published = true;
   static double cumulated_processing_time_ms;
+  static double start_stamp_s;
 
   if (last_call_published) {
-    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
-    double cloud_stamp_seconds = rclcpp::Time(packet_msg->stamp).seconds();
-
-    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/start_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+    start_stamp_s = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
   }
 
   stop_watch_ptr_->toc("processing_time", true);
@@ -283,14 +280,16 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
       "debug/processing_time_ms", cumulated_processing_time_ms);
 
-    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
-    double cloud_stamp_seconds = rclcpp::Time(current_scan_msg_->header.stamp).seconds();
-    double sensor_stamp_seconds = SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count() / 1.e9;
+    double now_s = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
+    double received_stamp_s = rclcpp::Time(current_scan_msg_->header.stamp).seconds();
+    double sensor_stamp_s = std::get<1>(pointcloud_ts);
 
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/end_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+      "debug/start_latency_ms", 1000.f * (start_stamp_s - sensor_stamp_s));
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/diff_sensor_system_ms", 1000.f * (cloud_stamp_seconds - sensor_stamp_seconds));
+      "debug/end_latency_ms", 1000.f * (now_s - sensor_stamp_s));
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/diff_sensor_system_ms", 1000.f * (received_stamp_s - sensor_stamp_s));
     debug_publisher_->publish<tier4_debug_msgs::msg::Int64Stamped>(
       "debug/packet_count", current_scan_msg_->packets.size());
   }

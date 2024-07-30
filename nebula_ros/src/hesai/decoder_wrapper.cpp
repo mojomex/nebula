@@ -99,7 +99,7 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
     debug_publisher_ = std::make_unique<DebugPublisher>(parent_node, "hesai_driver_ros_wrapper");
     stop_watch_ptr_->tic("processing_time");
   }
-  
+
   pub_thread_ = std::thread([&]() {
     while (true) {
       auto publish_data = publish_queue_.pop();
@@ -178,7 +178,7 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
     calib = std::make_shared<drivers::HesaiCalibrationConfiguration>();
   }
 
-  bool hw_connected = false; //hw_interface_ != nullptr;
+  bool hw_connected = false;  // hw_interface_ != nullptr;
   std::string calibration_file_path_from_sensor;
 
   {
@@ -249,15 +249,12 @@ HesaiDecoderWrapper::get_calibration_result_t HesaiDecoderWrapper::GetCalibratio
 void HesaiDecoderWrapper::ProcessCloudPacket(
   std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
 {
-  static bool last_call_published;
+  static bool last_call_published = true;
   static double cumulated_processing_time_ms;
+  static double start_stamp_s;
 
   if (last_call_published) {
-    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
-    double cloud_stamp_seconds = rclcpp::Time(packet_msg->stamp).seconds();
-
-    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/start_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+    start_stamp_s = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
   }
 
   stop_watch_ptr_->toc("processing_time", true);
@@ -294,12 +291,16 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     return;
   }
 
+  double sensor_stamp_s = std::get<1>(pointcloud_ts);
+  debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+    "debug/start_latency_ms", 1000.f * (start_stamp_s - sensor_stamp_s));
+
   publish_queue_.try_push({std::move(current_scan_msg_), pointcloud, std::get<1>(pointcloud_ts)});
   current_scan_msg_ = std::make_unique<nebula_msgs::msg::NebulaPackets>();
 
   debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-        "debug/processing_time_ms", cumulated_processing_time_ms);
-  
+    "debug/processing_time_ms", cumulated_processing_time_ms);
+
   cumulated_processing_time_ms = 0;
   last_call_published = true;
 }
@@ -312,14 +313,14 @@ void HesaiDecoderWrapper::publish(PublishData && data)
   cloud_watchdog_->update();
 
   {
-    double now_stamp_seconds = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
-    double cloud_stamp_seconds = header_stamp.seconds();
-    double sensor_stamp_seconds = rclcpp::Time(data.packets->header.stamp).seconds();
+    double end_stamp_s = rclcpp::Time(parent_node_.get_clock()->now()).seconds();
+    double received_stamp_s = rclcpp::Time(data.packets->header.stamp).seconds();
+    double sensor_stamp_s = data.cloud_timestamp_s;
 
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/end_latency_ms", 1000.f * (now_stamp_seconds - cloud_stamp_seconds));
+      "debug/end_latency_ms", 1000.f * (end_stamp_s - sensor_stamp_s));
     debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
-      "debug/diff_sensor_system_ms", 1000.f * (cloud_stamp_seconds - sensor_stamp_seconds));
+      "debug/diff_sensor_system_ms", 1000.f * (received_stamp_s - sensor_stamp_s));
     debug_publisher_->publish<tier4_debug_msgs::msg::Int64Stamped>(
       "debug/packet_count", data.packets->packets.size());
   }

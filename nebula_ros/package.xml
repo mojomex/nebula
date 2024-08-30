@@ -12,7 +12,6 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
   <buildtool_depend>ros_environment</buildtool_depend>
 
-  <depend>autoware_universe_utils</depend>
   <depend>tier4_debug_msgs</depend>
   <depend>continental_msgs</depend>
   <depend>continental_srvs</depend>

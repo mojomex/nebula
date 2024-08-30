@@ -1,0 +1,116 @@
+<launch>
+  <group>
+    <push-ros-namespace namespace="lidar" />
+
+    <!-- LiDARs connected to Main ECU -->
+    <group>
+      <push-ros-namespace namespace="rear_upper" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="Pandar128E4X" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/rear_upper.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="left_upper" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="Pandar128E4X" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/left_upper.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="rear_lower" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="PandarQT128" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/rear_lower.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="left_lower" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="PandarQT128" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/left_lower.yaml" />
+      </include>
+    </group>
+
+    <!-- LiDARs connected to Sub ECU -->
+    <group>
+      <push-ros-namespace namespace="front_upper" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="Pandar128E4X" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/front_upper.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="right_upper" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="Pandar128E4X" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/right_upper.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="front_lower" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="PandarQT128" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/front_lower.yaml" />
+      </include>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="right_lower" />
+      <include file="$(find-pkg-share nebula_ros)/launch/hesai_launch_all_hw.xml">
+        <arg name="sensor_model" value="PandarQT128" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/right_lower.yaml" />
+      </include>
+    </group>
+  </group>
+  <group>
+    <push-ros-namespace namespace="radar" />
+    <group>
+      <push-ros-namespace namespace="ars_114" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars114.yaml" />
+      </include>
+    </group>
+    <group>
+      <push-ros-namespace namespace="ars_115" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars115.yaml" />
+      </include>
+    </group>
+    <group>
+      <push-ros-namespace namespace="ars_116" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars116.yaml" />
+      </include>
+    </group>
+    <group>
+      <push-ros-namespace namespace="ars_117" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars117.yaml" />
+      </include>
+    </group>
+    <group>
+      <push-ros-namespace namespace="ars_118" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars118.yaml" />
+      </include>
+    </group>
+    <group>
+      <push-ros-namespace namespace="ars_119" />
+      <include file="$(find-pkg-share nebula_ros)/launch/continental_launch_all_hw.xml">
+        <arg name="sensor_model" value="ARS548" />
+        <arg name="config_file" value="/home/autoware/max_ptp_benchmark/configs/ars119.yaml" />
+      </include>
+    </group>
+  </group>
+</launch>

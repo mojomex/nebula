@@ -25,7 +25,8 @@ namespace continental_ars548
 {
 ContinentalARS548HwInterface::ContinentalARS548HwInterface()
 : sensor_io_context_ptr_{new ::drivers::common::IoContext(1)},
-  sensor_udp_driver_ptr_{new ::drivers::udp_driver::UdpDriver(*sensor_io_context_ptr_)}
+  sensor_udp_driver_ptr_{new ::drivers::udp_driver::UdpDriver(*sensor_io_context_ptr_)},
+  udp_sock_()
 {
 }
 
@@ -39,15 +40,15 @@ Status ContinentalARS548HwInterface::SetSensorConfiguration(
 Status ContinentalARS548HwInterface::SensorInterfaceStart()
 {
   try {
-    sensor_udp_driver_ptr_->init_receiver(
+    udp_sock_.init(
       config_ptr_->multicast_ip, config_ptr_->data_port, config_ptr_->host_ip,
-      config_ptr_->data_port, 2 << 16);
-    sensor_udp_driver_ptr_->receiver()->setMulticast(true);
-    sensor_udp_driver_ptr_->receiver()->open();
-    sensor_udp_driver_ptr_->receiver()->bind();
-    sensor_udp_driver_ptr_->receiver()->asyncReceiveWithSender(std::bind(
-      &ContinentalARS548HwInterface::ReceiveSensorPacketCallbackWithSender, this,
-      std::placeholders::_1, std::placeholders::_2));
+      config_ptr_->data_port);
+    udp_sock_.setBufferSize(2 << 16);
+    udp_sock_.open();
+    udp_sock_.bind();
+    udp_sock_.asyncReceive(std::bind(
+      &ContinentalARS548HwInterface::ReceiveSensorPacketCallback, this, std::placeholders::_1,
+      std::placeholders::_2));
 
     sensor_udp_driver_ptr_->init_sender(
       config_ptr_->sensor_ip, config_ptr_->configuration_sensor_port, config_ptr_->host_ip,
@@ -75,26 +76,23 @@ Status ContinentalARS548HwInterface::RegisterPacketCallback(
 }
 
 void ContinentalARS548HwInterface::ReceiveSensorPacketCallbackWithSender(
-  std::vector<uint8_t> & buffer, const std::string & sender_ip)
+  std::vector<uint8_t> & buffer, const std::string & sender_ip, uint64_t timestamp)
 {
   if (sender_ip == config_ptr_->sensor_ip) {
-    ReceiveSensorPacketCallback(buffer);
+    ReceiveSensorPacketCallback(buffer, timestamp);
   }
 }
-void ContinentalARS548HwInterface::ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer)
+void ContinentalARS548HwInterface::ReceiveSensorPacketCallback(
+  std::vector<uint8_t> & buffer, uint64_t timestamp)
 {
   if (buffer.size() < sizeof(HeaderPacket)) {
     PrintError("Unrecognized packet. Too short");
     return;
   }
 
-  const auto now = std::chrono::high_resolution_clock::now();
-  const auto timestamp_ns =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-
   auto msg_ptr = std::make_unique<nebula_msgs::msg::NebulaPacket>();
-  msg_ptr->stamp.sec = static_cast<int>(timestamp_ns / 1'000'000'000);
-  msg_ptr->stamp.nanosec = static_cast<int>(timestamp_ns % 1'000'000'000);
+  msg_ptr->stamp.sec = static_cast<int>(timestamp / 1'000'000'000);
+  msg_ptr->stamp.nanosec = static_cast<int>(timestamp % 1'000'000'000);
   msg_ptr->data.swap(buffer);
 
   packet_callback_(std::move(msg_ptr));

@@ -16,9 +16,8 @@ namespace nebula
 namespace drivers
 {
 HesaiHwInterface::HesaiHwInterface()
-: cloud_io_context_{new ::drivers::common::IoContext(1)},
-  m_owned_ctx{new boost::asio::io_context(1)},
-  cloud_udp_driver_{new ::drivers::udp_driver::UdpDriver(*cloud_io_context_)},
+: m_owned_ctx{new boost::asio::io_context(1)},
+  cloud_sock_(),
   tcp_driver_{new ::drivers::tcp_driver::TcpDriver(m_owned_ctx)}
 {
 }
@@ -142,44 +141,31 @@ Status HesaiHwInterface::SensorInterfaceStart()
 {
   try {
     std::cout << "Starting UDP server on: " << *sensor_configuration_ << std::endl;
-    cloud_udp_driver_->init_receiver(
+    cloud_sock_.init(
       sensor_configuration_->host_ip, sensor_configuration_->data_port);
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("init ok");
-#endif
-    cloud_udp_driver_->receiver()->open();
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("open ok");
-#endif
-    cloud_udp_driver_->receiver()->bind();
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("bind ok");
-#endif
-
-    cloud_udp_driver_->receiver()->asyncReceive(
-      std::bind(&HesaiHwInterface::ReceiveSensorPacketCallback, this, std::placeholders::_1));
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("async receive set");
-#endif
+    cloud_sock_.open();
+    cloud_sock_.bind();
+    cloud_sock_.asyncReceive(
+      std::bind(&HesaiHwInterface::ReceiveSensorPacketCallback, this, std::placeholders::_1, std::placeholders::_2));
   } catch (const std::exception & ex) {
     Status status = Status::UDP_CONNECTION_ERROR;
-    std::cerr << status << sensor_configuration_->sensor_ip << ","
-              << sensor_configuration_->data_port << std::endl;
+    std::cerr << status << " for " << sensor_configuration_->sensor_ip << ":"
+              << sensor_configuration_->data_port << ": " << ex.what() << std::endl;
     return status;
   }
   return Status::OK;
 }
 
 Status HesaiHwInterface::RegisterScanCallback(
-  std::function<void(std::vector<uint8_t> &)> scan_callback)
+  std::function<void(std::vector<uint8_t> &, uint64_t)> scan_callback)
 {
   cloud_packet_callback_ = std::move(scan_callback);
   return Status::OK;
 }
 
-void HesaiHwInterface::ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer)
+void HesaiHwInterface::ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer, uint64_t timestamp)
 {
-  cloud_packet_callback_(buffer);
+  cloud_packet_callback_(buffer, timestamp);
 }
 Status HesaiHwInterface::SensorInterfaceStop()
 {
@@ -331,6 +317,7 @@ HesaiConfig HesaiHwInterface::GetConfig()
 {
   auto response_or_err = SendReceive(PTC_COMMAND_GET_CONFIG_INFO);
   auto response = response_or_err.value_or_throw(PrettyPrintPTCError(response_or_err.error_or({})));
+
   auto hesai_config = CheckSizeAndParse<HesaiConfig>(response);
   std::cout << "Config: " << hesai_config << std::endl;
   return hesai_config;

@@ -16,12 +16,13 @@
 
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_hw_interface.hpp"
+#include <nebula_common/util/instrumentation.hpp>
 #include "nebula_ros/common/parameter_descriptors.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
 
-#include <autoware/universe_utils/ros/debug_publisher.hpp>
-#include <autoware/universe_utils/system/stop_watch.hpp>
 #include <nebula_common/hesai/hesai_common.hpp>
+#include <tier4_debug_msgs/msg/float64_stamped.hpp>
+#include <tier4_debug_msgs/msg/int64_stamped.hpp>
 #include <nebula_common/nebula_common.hpp>
 #include <rclcpp/rclcpp.hpp>
 
@@ -40,6 +41,7 @@ namespace nebula
 {
 namespace ros
 {
+
 class HesaiDecoderWrapper
 {
   using get_calibration_result_t = nebula::util::expected<
@@ -110,8 +112,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_ex_pub_{};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr aw_points_base_pub_{};
 
-  std::unique_ptr<autoware::universe_utils::StopWatch<std::chrono::milliseconds>> stop_watch_ptr_;
-  std::unique_ptr<autoware::universe_utils::DebugPublisher> debug_publisher_;
+  std::unique_ptr<StopWatch<std::chrono::milliseconds>> stop_watch_ptr_;
+  std::unique_ptr<DebugPublisher> debug_publisher_;
   std::shared_ptr<WatchdogTimer> cloud_watchdog_;
 };
 }  // namespace ros

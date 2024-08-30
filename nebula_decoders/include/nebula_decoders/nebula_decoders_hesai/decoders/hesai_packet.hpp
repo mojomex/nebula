@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
+#include <stdexcept>
 
 namespace nebula
 {
@@ -221,7 +222,8 @@ inline int get_n_returns(uint8_t return_mode)
     case return_mode::TRIPLE_FIRST_LAST_STRONGEST:
       return 3;
     default:
-      throw std::runtime_error("Unknown return mode");
+    return 1;
+      // throw std::runtime_error("Unknown return mode");
   }
 }
 

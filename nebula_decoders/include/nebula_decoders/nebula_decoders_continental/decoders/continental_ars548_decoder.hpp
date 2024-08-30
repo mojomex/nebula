@@ -25,6 +25,7 @@
 #include <nebula_msgs/msg/nebula_packets.hpp>
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -106,6 +107,9 @@ private:
 
   /// @brief SensorConfiguration for this decoder
   std::shared_ptr<const continental_ars548::ContinentalARS548SensorConfiguration> config_ptr_{};
+
+public:
+  uint64_t last_diff;
 };
 
 }  // namespace continental_ars548

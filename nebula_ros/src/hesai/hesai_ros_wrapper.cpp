@@ -48,7 +48,7 @@ HesaiRosWrapper::HesaiRosWrapper(const rclcpp::NodeOptions & options)
 
   if (launch_hw_) {
     hw_interface_wrapper_->HwInterface()->RegisterScanCallback(
-      std::bind(&HesaiRosWrapper::ReceiveCloudPacketCallback, this, std::placeholders::_1));
+      std::bind(&HesaiRosWrapper::ReceiveCloudPacketCallback, this, std::placeholders::_1, std::placeholders::_2));
     StreamStart();
   } else {
     packets_sub_ = create_subscription<pandar_msgs::msg::PandarScan>(
@@ -289,19 +289,15 @@ rcl_interfaces::msg::SetParametersResult HesaiRosWrapper::OnParameterChange(
   return rcl_interfaces::build<SetParametersResult>().successful(true).reason("");
 }
 
-void HesaiRosWrapper::ReceiveCloudPacketCallback(std::vector<uint8_t> & packet)
+void HesaiRosWrapper::ReceiveCloudPacketCallback(std::vector<uint8_t> & packet, uint64_t timestmap)
 {
   if (!decoder_wrapper_ || decoder_wrapper_->Status() != Status::OK) {
     return;
   }
 
-  const auto now = std::chrono::high_resolution_clock::now();
-  const auto timestamp_ns =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-
   auto msg_ptr = std::make_unique<nebula_msgs::msg::NebulaPacket>();
-  msg_ptr->stamp.sec = static_cast<int>(timestamp_ns / 1'000'000'000);
-  msg_ptr->stamp.nanosec = static_cast<int>(timestamp_ns % 1'000'000'000);
+  msg_ptr->stamp.sec = static_cast<int>(timestmap / 1'000'000'000);
+  msg_ptr->stamp.nanosec = static_cast<int>(timestmap % 1'000'000'000);
   msg_ptr->data.swap(packet);
 
   if (!packet_queue_.try_push(std::move(msg_ptr))) {

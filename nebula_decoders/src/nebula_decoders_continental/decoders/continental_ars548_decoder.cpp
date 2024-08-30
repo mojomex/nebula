@@ -409,6 +409,15 @@ bool ContinentalARS548Decoder::ParseSensorStatusPacket(
   radar_status_.timestamp_nanoseconds = sensor_status_packet.stamp.timestamp_nanoseconds.value();
   radar_status_.timestamp_seconds = sensor_status_packet.stamp.timestamp_seconds.value();
 
+    {
+    uint64_t sensor_ns = sensor_status_packet.stamp.timestamp_seconds.value() * 1'000'000'000LLU +
+                         sensor_status_packet.stamp.timestamp_nanoseconds.value();
+
+    uint64_t receive_ns = packet_msg.stamp.sec * 1'000'000'000LLU + packet_msg.stamp.nanosec;
+
+    last_diff = receive_ns - sensor_ns;
+  }
+
   switch (sensor_status_packet.stamp.timestamp_sync_status) {
     case SYNC_OK:
       radar_status_.timestamp_sync_status = "1:SYNC_OK";

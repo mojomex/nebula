@@ -64,7 +64,7 @@ public:
   Status StreamStart();
 
 private:
-  void ReceiveCloudPacketCallback(std::vector<uint8_t> & packet);
+  void ReceiveCloudPacketCallback(std::vector<uint8_t> & packet, uint64_t timestamp);
 
   void ReceiveScanMessageCallback(std::unique_ptr<pandar_msgs::msg::PandarScan> scan_msg);
 

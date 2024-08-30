@@ -81,9 +81,6 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
 
   // initialize debug tool
   {
-    using autoware::universe_utils::DebugPublisher;
-    using autoware::universe_utils::StopWatch;
-
     stop_watch_ptr_ = std::make_unique<StopWatch<std::chrono::milliseconds>>();
     debug_publisher_ = std::make_unique<DebugPublisher>(parent_node, "hesai_driver_ros_wrapper");
     stop_watch_ptr_->tic("processing_time");

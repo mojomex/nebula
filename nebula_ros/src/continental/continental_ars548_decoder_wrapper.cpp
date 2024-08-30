@@ -14,6 +14,8 @@
 
 #include "nebula_ros/continental/continental_ars548_decoder_wrapper.hpp"
 
+#include <tier4_debug_msgs/msg/float64_stamped.hpp>
+
 #include <pcl_conversions/pcl_conversions.h>
 
 namespace nebula
@@ -77,9 +79,16 @@ ContinentalARS548DecoderWrapper::ContinentalARS548DecoderWrapper(
     parent_node->create_publisher<visualization_msgs::msg::MarkerArray>("marker_array", 10);
 
   diagnostics_pub_ =
-    parent_node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("diagnostics", 10);
+    parent_node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
 
   RCLCPP_INFO_STREAM(logger_, ". Wrapper=" << status_);
+
+  {
+    stop_watch_ptr_ = std::make_unique<StopWatch<std::chrono::milliseconds>>();
+    debug_publisher_ =
+      std::make_unique<DebugPublisher>(parent_node, "continental_ars548_ros_wrapper");
+    stop_watch_ptr_->tic("processing_time");
+  }
 
   watchdog_ =
     std::make_shared<WatchdogTimer>(*parent_node, 100'000us, [this, parent_node](bool ok) {
@@ -193,6 +202,13 @@ void ContinentalARS548DecoderWrapper::ObjectListCallback(
 void ContinentalARS548DecoderWrapper::SensorStatusCallback(
   const drivers::continental_ars548::ContinentalARS548Status & sensor_status)
 {
+  {
+    auto diff = driver_ptr_->last_diff;
+
+    debug_publisher_->publish<tier4_debug_msgs::msg::Float64Stamped>(
+      "debug/diff_sensor_system_ms", diff / 1.e6);
+  }
+
   diagnostic_msgs::msg::DiagnosticArray diagnostic_array_msg;
   diagnostic_array_msg.header.stamp.sec = sensor_status.timestamp_seconds;
   diagnostic_array_msg.header.stamp.nanosec = sensor_status.timestamp_nanoseconds;
@@ -202,7 +218,7 @@ void ContinentalARS548DecoderWrapper::SensorStatusCallback(
   auto & status = diagnostic_array_msg.status[0];
   status.values.reserve(36);
   status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-  status.hardware_id = config_ptr_->frame_id;
+  status.hardware_id = std::string("ARS548:") + config_ptr_->sensor_ip;
   status.name = config_ptr_->frame_id;
   status.message = "Diagnostic messages from ARS548";
 

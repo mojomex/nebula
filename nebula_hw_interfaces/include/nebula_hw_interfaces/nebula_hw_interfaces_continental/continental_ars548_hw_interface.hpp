@@ -16,6 +16,7 @@
 #define NEBULA_CONTINENTAL_ARS548_HW_INTERFACE_H
 
 #include "nebula_hw_interfaces/nebula_hw_interfaces_common/nebula_hw_interface_base.hpp"
+#include "nebula_hw_interfaces/nebula_hw_interfaces_common/udp.hpp"
 
 #include <boost_udp_driver/udp_driver.hpp>
 #include <nebula_common/continental/continental_ars548.hpp>
@@ -154,16 +155,17 @@ private:
   /// @brief Callback function to receive the Cloud Packet data from the UDP Driver
   /// @param buffer Buffer containing the data received from the UDP socket
   void ReceiveSensorPacketCallbackWithSender(
-    std::vector<uint8_t> & buffer, const std::string & sender_ip);
+    std::vector<uint8_t> & buffer, const std::string & sender_ip, uint64_t timestamp);
 
   /// @brief Callback function to receive the Cloud Packet data from the UDP Driver
   /// @param buffer Buffer containing the data received from the UDP socket
-  void ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer);
+  void ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer, uint64_t timestamp);
 
   std::unique_ptr<::drivers::common::IoContext> sensor_io_context_ptr_;
   std::unique_ptr<::drivers::udp_driver::UdpDriver> sensor_udp_driver_ptr_;
   std::shared_ptr<const ContinentalARS548SensorConfiguration> config_ptr_;
   std::function<void(std::unique_ptr<nebula_msgs::msg::NebulaPacket>)> packet_callback_;
+  UdpSocket udp_sock_;
 
   std::shared_ptr<rclcpp::Logger> parent_node_logger_ptr_;
 };

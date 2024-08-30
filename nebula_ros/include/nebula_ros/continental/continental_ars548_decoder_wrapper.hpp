@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <nebula_common/util/instrumentation.hpp>
 #include "nebula_ros/common/parameter_descriptors.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
 
@@ -21,6 +22,7 @@
 #include <nebula_common/nebula_common.hpp>
 #include <nebula_common/util/expected.hpp>
 #include <nebula_decoders/nebula_decoders_continental/decoders/continental_ars548_decoder.hpp>
+#include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <continental_msgs/msg/continental_ars548_detection.hpp>
@@ -34,6 +36,8 @@
 #include <radar_msgs/msg/radar_tracks.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+
+#include <tier4_debug_msgs/msg/float64_stamped.hpp>
 
 #include <memory>
 #include <mutex>
@@ -163,6 +167,8 @@ private:
      {{0.0, -1.0}},
      {{0.0, 0.0}}}};
 
+  std::unique_ptr<StopWatch<std::chrono::milliseconds>> stop_watch_ptr_;
+  std::unique_ptr<DebugPublisher> debug_publisher_;
   std::shared_ptr<WatchdogTimer> watchdog_;
 };
 }  // namespace ros

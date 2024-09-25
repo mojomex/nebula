@@ -51,7 +51,7 @@ public:
 
   /// @brief Returns the point cloud and timestamp of the last scan
   /// @return A tuple of point cloud and timestamp in nanoseconds
-  virtual std::tuple<pcl::PCLPointCloud2Ptr, double> getPointcloud() = 0;
+  virtual std::tuple<sensor_msgs::msg::PointCloud2::UniquePtr, double> getPointcloud() = 0;
 };
 }  // namespace nebula::drivers
 

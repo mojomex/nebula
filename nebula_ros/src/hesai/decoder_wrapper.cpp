@@ -2,15 +2,19 @@
 
 #include "nebula_ros/hesai/decoder_wrapper.hpp"
 
+#include "cuda_blackboard/cuda_blackboard_publisher.hpp"
+#include "cuda_blackboard/cuda_pointcloud2.hpp"
+#include "nebula_ros/common/pointcloud_publishers.hpp"
+
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
 
-#include <pcl/PCLPointCloud2.h>
-#include <pcl_conversions/pcl_conversions.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <memory>
 #include <mutex>
+#include <utility>
 
 #pragma clang diagnostic ignored "-Wbitwise-instead-of-logical"
 namespace nebula
@@ -63,8 +67,16 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
   auto pointcloud_qos =
     rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 10), qos_profile);
 
-  nebula_points_pub_ =
-    parent_node->create_publisher<sensor_msgs::msg::PointCloud2>("pandar_points", pointcloud_qos);
+  if (config->publish_to_gpu) {
+    auto cuda_pub =
+      std::make_shared<cuda_blackboard::CudaBlackboardPublisher<cuda_blackboard::CudaPointCloud2>>(
+        parent_node_, "pandar_points");
+    nebula_points_pub_ = std::make_shared<CudaPointCloudPublisher>(cuda_pub);
+  } else {
+    auto pub =
+      parent_node_.create_publisher<sensor_msgs::msg::PointCloud2>("pandar_points", pointcloud_qos);
+    nebula_points_pub_ = std::make_shared<BasicPointCloudPublisher>(pub);
+  }
 
   RCLCPP_INFO_STREAM(logger_, ". Wrapper=" << status_);
 
@@ -133,25 +145,13 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     current_scan_msg_ = std::make_unique<pandar_msgs::msg::PandarScan>();
   }
 
-  if (
-    nebula_points_pub_->get_subscription_count() > 0 ||
-    nebula_points_pub_->get_intra_process_subscription_count() > 0) {
-    auto ros_pc_msg_ptr = std::make_unique<sensor_msgs::msg::PointCloud2>();
-    pcl_conversions::moveFromPCL(*pointcloud, *ros_pc_msg_ptr);
-    ros_pc_msg_ptr->header.stamp = rclcpp::Time(SecondsToChronoNanoSeconds(timestamp).count());
-    PublishCloud(std::move(ros_pc_msg_ptr), nebula_points_pub_);
-  }
-}
-
-void HesaiDecoderWrapper::PublishCloud(
-  std::unique_ptr<sensor_msgs::msg::PointCloud2> pointcloud,
-  const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr & publisher)
-{
+  pointcloud->header.frame_id = sensor_cfg_->frame_id;
+  pointcloud->header.stamp = rclcpp::Time(SecondsToChronoNanoSeconds(timestamp).count());
   if (pointcloud->header.stamp.sec < 0) {
     RCLCPP_WARN_STREAM(logger_, "Timestamp error, verify clock source.");
   }
-  pointcloud->header.frame_id = sensor_cfg_->frame_id;
-  publisher->publish(std::move(pointcloud));
+
+  nebula_points_pub_->publish_if_subscribers_exist(std::move(pointcloud));
 }
 
 nebula::Status HesaiDecoderWrapper::Status()

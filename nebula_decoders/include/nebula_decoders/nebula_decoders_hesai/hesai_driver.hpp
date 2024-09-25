@@ -17,11 +17,9 @@
 
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/nebula_status.hpp"
-#include "nebula_decoders/nebula_decoders_common/managed_point_cloud.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/hesai_scan_decoder.hpp"
 
-#include <pcl/PCLPointCloud2.h>
-#include <pcl_conversions/pcl_conversions.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <memory>
 #include <tuple>
@@ -70,7 +68,8 @@ public:
   /// @brief Convert raw packet to pointcloud
   /// @param packet Packet to convert
   /// @return Tuple of pointcloud and timestamp
-  std::tuple<pcl::PCLPointCloud2Ptr, double> ParseCloudPacket(const std::vector<uint8_t> & packet);
+  std::tuple<sensor_msgs::msg::PointCloud2::UniquePtr, double> ParseCloudPacket(
+    const std::vector<uint8_t> & packet);
 };
 
 }  // namespace drivers

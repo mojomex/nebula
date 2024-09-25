@@ -18,8 +18,6 @@
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include <pcl/PCLPointCloud2.h>
-#include <pcl/conversions.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <algorithm>
@@ -141,18 +139,10 @@ public:
    *
    * @return pcl::PCLPointCloud2 The popped pointcloud
    */
-  pcl::PCLPointCloud2 pop_cloud()
+  sensor_msgs::msg::PointCloud2 pop_cloud()
   {
-    pcl::PCLPointCloud2 result;
-    result.header = cloud_.header;
-    result.point_step = cloud_.point_step;
-    result.row_step = cloud_.row_step;
-    result.width = cloud_.width;
-    result.height = cloud_.height;
-    result.is_bigendian = cloud_.is_bigendian;
-    result.is_dense = cloud_.is_dense;
-    result.fields = cloud_.fields;
-    std::swap(result.data, cloud_.data);
+    sensor_msgs::msg::PointCloud2 result;
+    std::swap(result, cloud_);
     cloud_.data.clear();
     reset();
     return result;
@@ -163,7 +153,7 @@ public:
    *
    * @return const pcl::PCLPointCloud2& The current pointcloud
    */
-  const pcl::PCLPointCloud2 & peek_cloud() { return cloud_; }
+  const sensor_msgs::msg::PointCloud2 & peek_cloud() { return cloud_; }
 
 private:
   NebulaPoint & operator[](size_t index)
@@ -171,15 +161,15 @@ private:
     return *reinterpret_cast<NebulaPoint *>(&cloud_.data[index * sizeof(NebulaPoint)]);
   }
 
-  static pcl::PCLPointCloud2 get_empty_cloud()
+  static sensor_msgs::msg::PointCloud2 get_empty_cloud()
   {
     NebulaPointCloud cloud_template;
-    pcl::PCLPointCloud2 cloud;
-    pcl::toPCLPointCloud2(cloud_template, cloud);
+    sensor_msgs::msg::PointCloud2 cloud;
+    pcl::toROSMsg(cloud_template, cloud);
     return cloud;
   }
 
-  pcl::PCLPointCloud2 cloud_;
+  sensor_msgs::msg::PointCloud2 cloud_;
   std::optional<OrganizedCloudMetadata> organized_metadata_;
 };
 

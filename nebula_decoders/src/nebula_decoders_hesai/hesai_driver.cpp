@@ -13,8 +13,6 @@
 #include "nebula_decoders/nebula_decoders_hesai/decoders/pandar_xt32.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/pandar_xt32m.hpp"
 
-#include <pcl/PCLPointCloud2.h>
-
 #include <memory>
 
 // #define WITH_DEBUG_STD_COUT_HESAI_CLIENT // Use std::cout messages for debugging
@@ -79,7 +77,7 @@ std::shared_ptr<HesaiScanDecoder> HesaiDriver::InitializeDecoder(
     sensor_configuration, std::dynamic_pointer_cast<const CalibT>(calibration_configuration));
 }
 
-std::tuple<pcl::PCLPointCloud2Ptr, double> HesaiDriver::ParseCloudPacket(
+std::tuple<sensor_msgs::msg::PointCloud2::UniquePtr, double> HesaiDriver::ParseCloudPacket(
   const std::vector<uint8_t> & packet)
 {
   if (driver_status_ != nebula::Status::OK) {

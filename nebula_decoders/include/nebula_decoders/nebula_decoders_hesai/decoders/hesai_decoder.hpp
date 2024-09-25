@@ -26,6 +26,8 @@
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
 #include <pcl/PCLPointCloud2.h>
 
 #include <algorithm>
@@ -340,10 +342,11 @@ public:
 
   bool hasScanned() override { return has_scanned_; }
 
-  std::tuple<pcl::PCLPointCloud2Ptr, double> getPointcloud() override
+  std::tuple<sensor_msgs::msg::PointCloud2::UniquePtr, double> getPointcloud() override
   {
     double scan_timestamp_s = static_cast<double>(output_scan_timestamp_ns_) * 1e-9;
-    return {std::make_shared<pcl::PCLPointCloud2>(output_pc_->pop_cloud()), scan_timestamp_s};
+    return {
+      std::make_unique<sensor_msgs::msg::PointCloud2>(output_pc_->pop_cloud()), scan_timestamp_s};
   }
 };
 

@@ -56,6 +56,7 @@ public:
   static constexpr float MIN_RANGE = 0.05f;
   static constexpr float MAX_RANGE = 120.0f;
   static constexpr size_t MAX_SCAN_BUFFER_POINTS = 256000;
+  static constexpr size_t max_points_per_channel = 360 * 100 / 9;
 
   int getPacketRelativePointTimeOffset(
     uint32_t block_id, uint32_t channel_id, const packet_t & packet) override

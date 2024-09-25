@@ -14,6 +14,7 @@
 
   <depend>continental_msgs</depend>
   <depend>continental_srvs</depend>
+  <depend>cuda_blackboard</depend>
   <depend>diagnostic_msgs</depend>
   <depend>diagnostic_updater</depend>
   <depend>geometry_msgs</depend>

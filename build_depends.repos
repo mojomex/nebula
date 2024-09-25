@@ -9,3 +9,11 @@ repositories:
     type: git
     url: https://github.com/knzo25/ros2_socketcan
     version: feat/continental_fd
+  cuda_blackboard:
+    type: git
+    url: https://github.com/knzo25/cuda_blackboard
+    version: main
+  negotiated:
+    type: git
+    url: https://github.com/osrf/negotiated
+    version: master

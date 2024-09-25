@@ -86,6 +86,9 @@
         },
         "dual_return_distance_threshold": {
           "$ref": "sub/misc.json#/definitions/dual_return_distance_threshold"
+        },
+        "publish_to_gpu": {
+          "$ref": "sub/lidar_hesai.json#/definitions/publish_to_gpu"
         }
       },
       "required": [
@@ -111,7 +114,8 @@
         "ptp_transport_type",
         "ptp_switch_type",
         "retry_hw",
-        "dual_return_distance_threshold"
+        "dual_return_distance_threshold",
+        "publish_to_gpu"
       ],
       "additionalProperties": false
     }

@@ -15,9 +15,14 @@
 #ifndef NEBULA_WS_HESAI_SCAN_DECODER_HPP
 #define NEBULA_WS_HESAI_SCAN_DECODER_HPP
 
+#include "nebula_decoders/nebula_decoders_common/managed_point_cloud.hpp"
+
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <nebula_common/point_types.hpp>
 
+#include <pcl/PCLPointCloud2.h>
+
+#include <memory>
 #include <tuple>
 #include <vector>
 
@@ -46,7 +51,7 @@ public:
 
   /// @brief Returns the point cloud and timestamp of the last scan
   /// @return A tuple of point cloud and timestamp in nanoseconds
-  virtual std::tuple<drivers::NebulaPointCloudPtr, double> getPointcloud() = 0;
+  virtual std::tuple<pcl::PCLPointCloud2Ptr, double> getPointcloud() = 0;
 };
 }  // namespace nebula::drivers
 

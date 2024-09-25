@@ -15,6 +15,7 @@
 #pragma once
 
 #include "nebula_decoders/nebula_decoders_common/angles.hpp"
+#include "nebula_decoders/nebula_decoders_common/managed_point_cloud.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/angle_corrector.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/hesai_packet.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/decoders/hesai_scan_decoder.hpp"
@@ -24,6 +25,8 @@
 #include <nebula_common/point_types.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
+
+#include <pcl/PCLPointCloud2.h>
 
 #include <algorithm>
 #include <array>
@@ -57,9 +60,9 @@ protected:
   typename SensorT::angle_corrector_t angle_corrector_;
 
   /// @brief The point cloud new points get added to
-  NebulaPointCloudPtr decode_pc_;
+  std::shared_ptr<ManagedPointCloud> decode_pc_;
   /// @brief The point cloud that is returned when a scan is complete
-  NebulaPointCloudPtr output_pc_;
+  std::shared_ptr<ManagedPointCloud> output_pc_;
 
   /// @brief The last decoded packet
   typename SensorT::packet_t packet_;
@@ -195,7 +198,7 @@ protected:
         uint64_t scan_timestamp_ns =
           in_current_scan ? decode_scan_timestamp_ns_ : output_scan_timestamp_ns_;
 
-        NebulaPoint & point = pc->emplace_back();
+        NebulaPoint point;
         point.distance = distance;
         point.intensity = unit.reflectivity;
         point.time_stamp = getPointTimeRelative(
@@ -214,6 +217,8 @@ protected:
         // The driver wrapper converts to degrees, expects radians
         point.azimuth = corrected_angle_data.azimuth_rad;
         point.elevation = corrected_angle_data.elevation_rad;
+
+        pc->push_back(point);
       }
     }
   }
@@ -256,15 +261,19 @@ public:
     logger_.set_level(rclcpp::Logger::Level::Debug);
     RCLCPP_INFO_STREAM(logger_, *sensor_configuration_);
 
-    decode_pc_ = std::make_shared<NebulaPointCloud>();
-    output_pc_ = std::make_shared<NebulaPointCloud>();
-
-    decode_pc_->reserve(SensorT::MAX_SCAN_BUFFER_POINTS);
-    output_pc_->reserve(SensorT::MAX_SCAN_BUFFER_POINTS);
-
     scan_cut_angles_ = {
       deg2rad(sensor_configuration_->cloud_min_angle),
       deg2rad(sensor_configuration_->cloud_max_angle), deg2rad(sensor_configuration_->cut_angle)};
+
+    if (sensor_configuration_->publish_to_gpu) {
+      size_t width = SensorT::max_points_per_channel;
+      size_t height = SensorT::packet_t::N_CHANNELS;
+      decode_pc_ = std::make_shared<ManagedPointCloud>(width, height);
+      output_pc_ = std::make_shared<ManagedPointCloud>(width, height);
+    } else {
+      decode_pc_ = std::make_shared<ManagedPointCloud>();
+      output_pc_ = std::make_shared<ManagedPointCloud>();
+    }
   }
 
   int unpack(const std::vector<uint8_t> & packet) override
@@ -280,7 +289,7 @@ public:
     }
 
     if (has_scanned_) {
-      output_pc_->clear();
+      output_pc_->reset();
       has_scanned_ = false;
     }
 
@@ -331,10 +340,10 @@ public:
 
   bool hasScanned() override { return has_scanned_; }
 
-  std::tuple<drivers::NebulaPointCloudPtr, double> getPointcloud() override
+  std::tuple<pcl::PCLPointCloud2Ptr, double> getPointcloud() override
   {
     double scan_timestamp_s = static_cast<double>(output_scan_timestamp_ns_) * 1e-9;
-    return std::make_pair(output_pc_, scan_timestamp_s);
+    return {std::make_shared<pcl::PCLPointCloud2>(output_pc_->pop_cloud()), scan_timestamp_s};
   }
 };
 

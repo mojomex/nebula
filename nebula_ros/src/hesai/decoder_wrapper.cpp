@@ -6,7 +6,11 @@
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
 
+#include <pcl/PCLPointCloud2.h>
+#include <pcl_conversions/pcl_conversions.h>
+
 #include <memory>
+#include <mutex>
 
 #pragma clang diagnostic ignored "-Wbitwise-instead-of-logical"
 namespace nebula
@@ -108,13 +112,9 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     current_scan_msg_->packets.emplace_back(std::move(pandar_packet_msg));
   }
 
-  std::tuple<nebula::drivers::NebulaPointCloudPtr, double> pointcloud_ts{};
-  nebula::drivers::NebulaPointCloudPtr pointcloud = nullptr;
-  {
-    std::lock_guard lock(mtx_driver_ptr_);
-    pointcloud_ts = driver_ptr_->ParseCloudPacket(packet_msg->data);
-    pointcloud = std::get<0>(pointcloud_ts);
-  }
+  std::unique_lock lock(mtx_driver_ptr_);
+  auto [pointcloud, timestamp] = driver_ptr_->ParseCloudPacket(packet_msg->data);
+  lock.unlock();
 
   // A pointcloud is only emitted when a scan completes (e.g. 3599 packets do not emit, the 3600th
   // emits one)
@@ -137,9 +137,8 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     nebula_points_pub_->get_subscription_count() > 0 ||
     nebula_points_pub_->get_intra_process_subscription_count() > 0) {
     auto ros_pc_msg_ptr = std::make_unique<sensor_msgs::msg::PointCloud2>();
-    pcl::toROSMsg(*pointcloud, *ros_pc_msg_ptr);
-    ros_pc_msg_ptr->header.stamp =
-      rclcpp::Time(SecondsToChronoNanoSeconds(std::get<1>(pointcloud_ts)).count());
+    pcl_conversions::moveFromPCL(*pointcloud, *ros_pc_msg_ptr);
+    ros_pc_msg_ptr->header.stamp = rclcpp::Time(SecondsToChronoNanoSeconds(timestamp).count());
     PublishCloud(std::move(ros_pc_msg_ptr), nebula_points_pub_);
   }
 }

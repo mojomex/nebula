@@ -195,6 +195,8 @@ nebula::Status HesaiRosWrapper::DeclareAndGetSensorConfigParams()
     config.ptp_domain = declare_parameter<uint8_t>("ptp_domain", descriptor);
   }
 
+  config.publish_to_gpu = declare_parameter<bool>("publish_to_gpu", param_read_only());
+
   auto new_cfg_ptr = std::make_shared<const nebula::drivers::HesaiSensorConfiguration>(config);
   return ValidateAndSetConfig(new_cfg_ptr);
 }

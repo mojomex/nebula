@@ -49,6 +49,7 @@ struct HesaiSensorConfiguration : public LidarConfigurationBase
   uint8_t ptp_domain;
   PtpTransportType ptp_transport_type;
   PtpSwitchType ptp_switch_type;
+  bool publish_to_gpu;
 };
 /// @brief Convert HesaiSensorConfiguration to string (Overloading the << operator)
 /// @param os

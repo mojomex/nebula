@@ -14,8 +14,9 @@
 
 #pragma once
 
+#include "cuda_blackboard/cuda_blackboard_publisher.hpp"
+#include "cuda_blackboard/cuda_pointcloud2.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
-#include "nebula_ros/common/pointcloud_publishers.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
 
 #include <nebula_common/hesai/hesai_common.hpp>
@@ -79,7 +80,8 @@ private:
   rclcpp::Publisher<pandar_msgs::msg::PandarScan>::SharedPtr packets_pub_{};
   pandar_msgs::msg::PandarScan::UniquePtr current_scan_msg_{};
 
-  std::shared_ptr<PointCloudPublisher> nebula_points_pub_;
+  std::shared_ptr<cuda_blackboard::CudaBlackboardPublisher<cuda_blackboard::CudaPointCloud2>>
+    cloud_pub_;
 
   std::shared_ptr<WatchdogTimer> cloud_watchdog_;
 };

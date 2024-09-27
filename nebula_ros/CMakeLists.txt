@@ -7,7 +7,7 @@ if (NOT CMAKE_CXX_STANDARD)
 endif ()
 
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic -Wunused-function)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wunused-function -Wl,--no-undefined -Wl,-z,defs)
 endif ()
 
 find_package(ament_cmake_auto REQUIRED)
@@ -62,6 +62,7 @@ target_include_directories(hesai_ros_wrapper PUBLIC
     ${pandar_msgs_INCLUDE_DIRS}
     ${CUDA_INCLUDE_DIRS}
     ${cuda_blackboard_INCLUDE_DIRS}
+    ${negotiated_INCLUDE_DIRS}
 )
 
 target_link_libraries(hesai_ros_wrapper PUBLIC
@@ -70,6 +71,7 @@ target_link_libraries(hesai_ros_wrapper PUBLIC
     ${pandar_msgs_TARGETS}
     ${CUDA_LIBRARIES}
     ${cuda_blackboard_TARGETS}
+    ${negotiated_TARGETS}
     nebula_decoders::nebula_decoders_hesai
     nebula_hw_interfaces::nebula_hw_interfaces_hesai
 )

@@ -70,14 +70,14 @@ public:
       cloud_.data.resize(new_size);
       cloud_.width += 1;
       cloud_.row_step = cloud_.width * cloud_.point_step;
-      (*this)[index] = p;
+      set(index, p);
       return;
     }
 
     uint16_t channel = p.channel;
     auto & row_end = organized_metadata_->row_ends.at(channel);
     size_t index = channel * cloud_.width + row_end;
-    (*this)[index] = p;
+    set(index, p);
     row_end++;
   }
 
@@ -87,6 +87,8 @@ public:
    */
   void reset()
   {
+    resets++;
+
     if (!organized_metadata_.has_value()) {
       cloud_.width = cloud_.row_step = 0;
       cloud_.data.clear();
@@ -142,7 +144,15 @@ public:
   sensor_msgs::msg::PointCloud2 pop_cloud()
   {
     sensor_msgs::msg::PointCloud2 result;
-    std::swap(result, cloud_);
+    result.header = cloud_.header;
+    result.point_step = cloud_.point_step;
+    result.row_step = cloud_.row_step;
+    result.width = cloud_.width;
+    result.height = cloud_.height;
+    result.fields = cloud_.fields;
+    result.is_bigendian = cloud_.is_bigendian;
+    result.is_dense = cloud_.is_dense;
+    std::swap(result.data, cloud_.data);
     cloud_.data.clear();
     reset();
     return result;
@@ -156,6 +166,11 @@ public:
   const sensor_msgs::msg::PointCloud2 & peek_cloud() { return cloud_; }
 
 private:
+  void set(size_t index, const NebulaPoint & value)
+  {
+    std::memcpy(&cloud_.data[index * sizeof(value)], &value, sizeof(value));
+  }
+
   NebulaPoint & operator[](size_t index)
   {
     return *reinterpret_cast<NebulaPoint *>(&cloud_.data[index * sizeof(NebulaPoint)]);
@@ -171,6 +186,8 @@ private:
 
   sensor_msgs::msg::PointCloud2 cloud_;
   std::optional<OrganizedCloudMetadata> organized_metadata_;
+
+  size_t resets = 0;
 };
 
 }  // namespace nebula::drivers

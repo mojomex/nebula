@@ -4,7 +4,6 @@
 
 #include "cuda_blackboard/cuda_blackboard_publisher.hpp"
 #include "cuda_blackboard/cuda_pointcloud2.hpp"
-#include "nebula_ros/common/pointcloud_publishers.hpp"
 
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <rclcpp/logging.hpp>
@@ -63,20 +62,9 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
       "pandar_packets", rclcpp::SensorDataQoS());
   }
 
-  auto qos_profile = rmw_qos_profile_sensor_data;
-  auto pointcloud_qos =
-    rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 10), qos_profile);
-
-  if (config->publish_to_gpu) {
-    auto cuda_pub =
-      std::make_shared<cuda_blackboard::CudaBlackboardPublisher<cuda_blackboard::CudaPointCloud2>>(
-        parent_node_, "pandar_points");
-    nebula_points_pub_ = std::make_shared<CudaPointCloudPublisher>(cuda_pub);
-  } else {
-    auto pub =
-      parent_node_.create_publisher<sensor_msgs::msg::PointCloud2>("pandar_points", pointcloud_qos);
-    nebula_points_pub_ = std::make_shared<BasicPointCloudPublisher>(pub);
-  }
+  cloud_pub_ =
+    std::make_shared<cuda_blackboard::CudaBlackboardPublisher<cuda_blackboard::CudaPointCloud2>>(
+      parent_node_, "pandar_points");
 
   RCLCPP_INFO_STREAM(logger_, ". Wrapper=" << status_);
 
@@ -151,7 +139,12 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     RCLCPP_WARN_STREAM(logger_, "Timestamp error, verify clock source.");
   }
 
-  nebula_points_pub_->publish_if_subscribers_exist(std::move(pointcloud));
+  if (
+    !cloud_pub_->get_subscription_count() && !cloud_pub_->get_intra_process_subscription_count()) {
+    return;
+  }
+
+  cloud_pub_->publish(std::move(pointcloud));
 }
 
 nebula::Status HesaiDecoderWrapper::Status()

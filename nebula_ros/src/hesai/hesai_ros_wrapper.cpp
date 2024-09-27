@@ -22,7 +22,7 @@ namespace nebula
 namespace ros
 {
 HesaiRosWrapper::HesaiRosWrapper(const rclcpp::NodeOptions & options)
-: rclcpp::Node("hesai_ros_wrapper", rclcpp::NodeOptions(options).use_intra_process_comms(true)),
+: rclcpp::Node("hesai_ros_wrapper", options),
   wrapper_status_(Status::NOT_INITIALIZED),
   sensor_cfg_ptr_(nullptr),
   packet_queue_(3000),

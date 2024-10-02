@@ -2,9 +2,13 @@
 
 #include "nebula_ros/hesai/decoder_wrapper.hpp"
 
+#include "nebula_ros/hesai/counters.hpp"
+
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
+
+#include <tier4_debug_msgs/msg/int64_stamped.hpp>
 
 #include <memory>
 
@@ -21,7 +25,8 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
   const std::shared_ptr<const nebula::drivers::HesaiSensorConfiguration> & config,
   const std::shared_ptr<const drivers::HesaiCalibrationConfigurationBase> & calibration,
   bool publish_packets)
-: status_(nebula::Status::NOT_INITIALIZED),
+: debug_pub_(parent_node, parent_node->get_fully_qualified_name()),
+  status_(nebula::Status::NOT_INITIALIZED),
   logger_(parent_node->get_logger().get_child("HesaiDecoder")),
   parent_node_(*parent_node),
   sensor_cfg_(config),
@@ -95,8 +100,14 @@ void HesaiDecoderWrapper::OnCalibrationChange(
 }
 
 void HesaiDecoderWrapper::ProcessCloudPacket(
-  std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
+  std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg, PerformanceCounters queue_counters)
 {
+  PerformanceCounters queue_counters_backup = queue_counters;
+  counters_.plus(queue_counters.minus(queue_counters_prev_));
+  queue_counters_prev_ = queue_counters_backup;
+
+  counters_.incr("queue_popped");
+
   // Accumulate packets for recording only if someone is subscribed to the topic (for performance)
   if (
     packets_pub_ && (packets_pub_->get_subscription_count() > 0 ||
@@ -110,6 +121,7 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     pandar_packet_msg.size = packet_msg->data.size();
     std::copy(packet_msg->data.begin(), packet_msg->data.end(), pandar_packet_msg.data.begin());
     current_scan_msg_->packets.emplace_back(std::move(pandar_packet_msg));
+    counters_.incr("scan_msg_emplaced");
   }
 
   std::tuple<nebula::drivers::NebulaPointCloudPtr, double> pointcloud_ts{};
@@ -120,6 +132,8 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     pointcloud = std::get<0>(pointcloud_ts);
   }
 
+  counters_.incr("decoded");
+
   // A pointcloud is only emitted when a scan completes (e.g. 3599 packets do not emit, the 3600th
   // emits one)
   if (pointcloud == nullptr) {
@@ -128,6 +142,13 @@ void HesaiDecoderWrapper::ProcessCloudPacket(
     // packets come in), the watchdog will log a warning automatically
     return;
   }
+
+  counters_.get_all([&](const std::map<std::string, int64_t> & counters) {
+    for (const auto & [k, v] : counters) {
+      debug_pub_.publish<tier4_debug_msgs::msg::Int64Stamped>(k, v);
+    }
+  });
+  counters_.reset();
 
   cloud_watchdog_->update();
 

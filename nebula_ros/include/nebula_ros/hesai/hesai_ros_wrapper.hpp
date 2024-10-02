@@ -14,10 +14,13 @@
 
 #pragma once
 
+#include "counters.hpp"
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/nebula_common.hpp"
 #include "nebula_common/nebula_status.hpp"
+#include "nebula_common/util/expected.hpp"
 #include "nebula_ros/common/mt_queue.hpp"
+#include "nebula_ros/hesai/counters.hpp"
 #include "nebula_ros/hesai/decoder_wrapper.hpp"
 #include "nebula_ros/hesai/hw_interface_wrapper.hpp"
 #include "nebula_ros/hesai/hw_monitor_wrapper.hpp"
@@ -33,6 +36,7 @@
 #include <boost/asio.hpp>
 #include <boost/lexical_cast.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -64,7 +68,9 @@ public:
   Status StreamStart();
 
 private:
-  void ReceiveCloudPacketCallback(std::vector<uint8_t> & packet);
+  PerformanceCounters counters_;
+
+  void ReceiveCloudPacketCallback(std::vector<uint8_t> & packet, size_t n_dropped);
 
   void ReceiveScanMessageCallback(std::unique_ptr<pandar_msgs::msg::PandarScan> scan_msg);
 

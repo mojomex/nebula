@@ -71,13 +71,14 @@ HesaiRosWrapper::HesaiRosWrapper(const rclcpp::NodeOptions & options)
 
   decoder_thread_ = std::thread([this]() {
     while (true) {
-      decoder_wrapper_->ProcessCloudPacket(packet_queue_.pop());
+      decoder_wrapper_->ProcessCloudPacket(packet_queue_.pop(), counters_);
     }
   });
 
   if (launch_hw_) {
-    hw_interface_wrapper_->HwInterface()->RegisterScanCallback(
-      std::bind(&HesaiRosWrapper::ReceiveCloudPacketCallback, this, std::placeholders::_1));
+    hw_interface_wrapper_->HwInterface()->RegisterScanCallback(std::bind(
+      &HesaiRosWrapper::ReceiveCloudPacketCallback, this, std::placeholders::_1,
+      std::placeholders::_2));
     StreamStart();
   } else {
     packets_sub_ = create_subscription<pandar_msgs::msg::PandarScan>(
@@ -399,9 +400,12 @@ rcl_interfaces::msg::SetParametersResult HesaiRosWrapper::OnParameterChange(
   return rcl_interfaces::build<SetParametersResult>().successful(true).reason("");
 }
 
-void HesaiRosWrapper::ReceiveCloudPacketCallback(std::vector<uint8_t> & packet)
+void HesaiRosWrapper::ReceiveCloudPacketCallback(std::vector<uint8_t> & packet, size_t n_dropped)
 {
+  counters_.incr("dropped_in_socket", n_dropped);
+
   if (!decoder_wrapper_ || decoder_wrapper_->Status() != Status::OK) {
+    counters_.incr("dropped_waiting_for_decoder");
     return;
   }
 
@@ -414,9 +418,13 @@ void HesaiRosWrapper::ReceiveCloudPacketCallback(std::vector<uint8_t> & packet)
   msg_ptr->stamp.nanosec = static_cast<int>(timestamp_ns % 1'000'000'000);
   msg_ptr->data.swap(packet);
 
+  counters_.declare("dropped_packet_queue_full");
   if (!packet_queue_.try_push(std::move(msg_ptr))) {
+    counters_.incr("dropped_packet_queue_full");
     RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 500, "Packet(s) dropped");
   }
+
+  counters_.incr("queue_pushed");
 }
 
 std::string HesaiRosWrapper::getCalibrationParameterName(drivers::SensorModel model) const

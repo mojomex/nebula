@@ -22,9 +22,10 @@
 namespace nebula::drivers
 {
 HesaiHwInterface::HesaiHwInterface()
-: cloud_io_context_{new ::drivers::common::IoContext(1)},
+: cloud_driver_([this](std::vector<uint8_t> & buffer, size_t n_dropped) {
+    ReceiveSensorPacketCallback(buffer, n_dropped);
+  }),
   m_owned_ctx{new boost::asio::io_context(1)},
-  cloud_udp_driver_{new ::drivers::udp_driver::UdpDriver(*cloud_io_context_)},
   tcp_driver_{new ::drivers::tcp_driver::TcpDriver(m_owned_ctx)}
 {
 }
@@ -150,40 +151,12 @@ Status HesaiHwInterface::SensorInterfaceStart()
   try {
     std::cout << "Starting UDP server on: " << *sensor_configuration_ << std::endl;
     if (sensor_configuration_->multicast_ip.empty()) {
-      cloud_udp_driver_->init_receiver(
-        sensor_configuration_->host_ip, sensor_configuration_->data_port);
+      std::cout << "Connecting to UDP @ " << sensor_configuration_->host_ip << ":"
+                << sensor_configuration_->data_port << std::endl;
+      cloud_driver_.init(sensor_configuration_->host_ip, sensor_configuration_->data_port);
     } else {
-      cloud_udp_driver_->init_receiver(
-        sensor_configuration_->multicast_ip, sensor_configuration_->data_port,
-        sensor_configuration_->host_ip, sensor_configuration_->data_port);
-      cloud_udp_driver_->receiver()->setMulticast(true);
+      throw std::runtime_error("Not implemented");
     }
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("init ok");
-#endif
-    cloud_udp_driver_->receiver()->open();
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("open ok");
-#endif
-
-    bool success = cloud_udp_driver_->receiver()->setKernelBufferSize(UDP_SOCKET_BUFFER_SIZE);
-    if (!success) {
-      PrintError(
-        "Could not set receive buffer size. Try increasing net.core.rmem_max to " +
-        std::to_string(UDP_SOCKET_BUFFER_SIZE) + " B.");
-      return Status::ERROR_1;
-    }
-
-    cloud_udp_driver_->receiver()->bind();
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("bind ok");
-#endif
-
-    cloud_udp_driver_->receiver()->asyncReceive(
-      std::bind(&HesaiHwInterface::ReceiveSensorPacketCallback, this, std::placeholders::_1));
-#ifdef WITH_DEBUG_STDOUT_HESAI_HW_INTERFACE
-    PrintError("async receive set");
-#endif
   } catch (const std::exception & ex) {
     Status status = Status::UDP_CONNECTION_ERROR;
     std::cerr << status << " for " << sensor_configuration_->sensor_ip << ":"
@@ -194,15 +167,16 @@ Status HesaiHwInterface::SensorInterfaceStart()
 }
 
 Status HesaiHwInterface::RegisterScanCallback(
-  std::function<void(std::vector<uint8_t> &)> scan_callback)
+  std::function<void(std::vector<uint8_t> &, size_t)> scan_callback)
 {
   cloud_packet_callback_ = std::move(scan_callback);
   return Status::OK;
 }
 
-void HesaiHwInterface::ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer)
+void HesaiHwInterface::ReceiveSensorPacketCallback(std::vector<uint8_t> & buffer, size_t n_dropped)
 {
-  cloud_packet_callback_(buffer);
+  if (!cloud_packet_callback_) return;
+  cloud_packet_callback_(buffer, n_dropped);
 }
 Status HesaiHwInterface::SensorInterfaceStop()
 {

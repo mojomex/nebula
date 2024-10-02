@@ -14,9 +14,12 @@
 
 #pragma once
 
+#include "counters.hpp"
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_hw_interface.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
+#include "nebula_ros/hesai/counters.hpp"
+#include "nebula_ros/hesai/debug_publisher.hpp"
 
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <nebula_common/nebula_common.hpp>
@@ -41,7 +44,8 @@ public:
     const std::shared_ptr<const nebula::drivers::HesaiCalibrationConfigurationBase> & calibration,
     bool publish_packets);
 
-  void ProcessCloudPacket(std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg);
+  void ProcessCloudPacket(
+    std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg, PerformanceCounters queue_counters);
 
   void OnConfigChange(
     const std::shared_ptr<const nebula::drivers::HesaiSensorConfiguration> & new_config);
@@ -65,6 +69,10 @@ private:
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::duration<double>(seconds));
   }
+
+  PerformanceCounters counters_;
+  PerformanceCounters queue_counters_prev_;
+  autoware::universe_utils::DebugPublisher debug_pub_;
 
   nebula::Status status_;
   rclcpp::Logger logger_;

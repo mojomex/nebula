@@ -2,12 +2,15 @@
 
 #include "nebula_ros/hesai/hesai_ros_wrapper.hpp"
 
+#include "nebula_ros/common/counters.hpp"
+#include "nebula_ros/common/debug_publisher.hpp"
 #include "nebula_ros/common/parameter_descriptors.hpp"
 
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <nebula_common/nebula_common.hpp>
 #include <nebula_decoders/nebula_decoders_common/angles.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -21,9 +24,9 @@ namespace nebula::ros
 {
 HesaiRosWrapper::HesaiRosWrapper(const rclcpp::NodeOptions & options)
 : rclcpp::Node("hesai_ros_wrapper", rclcpp::NodeOptions(options).use_intra_process_comms(true)),
+  counter_(this),
   wrapper_status_(Status::NOT_INITIALIZED),
   sensor_cfg_ptr_(nullptr),
-  packet_queue_(3000),
   hw_interface_wrapper_(),
   hw_monitor_wrapper_(),
   decoder_wrapper_()
@@ -66,12 +69,6 @@ HesaiRosWrapper::HesaiRosWrapper(const rclcpp::NodeOptions & options)
   decoder_wrapper_.emplace(this, sensor_cfg_ptr_, calibration_result.value(), launch_hw_);
 
   RCLCPP_DEBUG(get_logger(), "Starting stream");
-
-  decoder_thread_ = std::thread([this]() {
-    while (true) {
-      decoder_wrapper_->process_cloud_packet(packet_queue_.pop());
-    }
-  });
 
   if (launch_hw_) {
     hw_interface_wrapper_->hw_interface()->RegisterScanCallback(
@@ -273,8 +270,7 @@ void HesaiRosWrapper::receive_scan_message_callback(
     auto nebula_pkt_ptr = std::make_unique<nebula_msgs::msg::NebulaPacket>();
     nebula_pkt_ptr->stamp = pkt.stamp;
     std::copy(pkt.data.begin(), pkt.data.end(), std::back_inserter(nebula_pkt_ptr->data));
-
-    packet_queue_.push(std::move(nebula_pkt_ptr));
+    decoder_wrapper_->process_cloud_packet(std::move(nebula_pkt_ptr), counter_);
   }
 }
 
@@ -400,6 +396,8 @@ rcl_interfaces::msg::SetParametersResult HesaiRosWrapper::on_parameter_change(
 
 void HesaiRosWrapper::receive_cloud_packet_callback(std::vector<uint8_t> & packet)
 {
+  auto perf_start = std::chrono::steady_clock::now();
+
   if (!decoder_wrapper_ || decoder_wrapper_->status() != Status::OK) {
     return;
   }
@@ -412,9 +410,12 @@ void HesaiRosWrapper::receive_cloud_packet_callback(std::vector<uint8_t> & packe
   msg_ptr->stamp.sec = static_cast<int>(timestamp_ns / 1'000'000'000);
   msg_ptr->stamp.nanosec = static_cast<int>(timestamp_ns % 1'000'000'000);
   msg_ptr->data.swap(packet);
+  bool published = decoder_wrapper_->process_cloud_packet(std::move(msg_ptr), counter_);
 
-  if (!packet_queue_.try_push(std::move(msg_ptr))) {
-    RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 500, "Packet(s) dropped");
+  auto perf_stop = std::chrono::steady_clock::now();
+  counter_.contribute("total_ns", perf_stop - perf_start);
+  if (published) {
+    counter_.publish_all();
   }
 }
 

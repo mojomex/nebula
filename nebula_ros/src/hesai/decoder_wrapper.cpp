@@ -2,10 +2,13 @@
 
 #include "nebula_ros/hesai/decoder_wrapper.hpp"
 
+#include "nebula_ros/common/counters.hpp"
+
 #include <nebula_common/hesai/hesai_common.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
 
+#include <chrono>
 #include <memory>
 
 #pragma clang diagnostic ignored "-Wbitwise-instead-of-logical"
@@ -92,9 +95,11 @@ void HesaiDecoderWrapper::on_calibration_change(
   calibration_cfg_ptr_ = new_calibration;
 }
 
-void HesaiDecoderWrapper::process_cloud_packet(
-  std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg)
+bool HesaiDecoderWrapper::process_cloud_packet(
+  std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg, Counter & counter)
 {
+  auto t1 = std::chrono::steady_clock::now();
+
   // Accumulate packets for recording only if someone is subscribed to the topic (for performance)
   if (
     packets_pub_ && (packets_pub_->get_subscription_count() > 0 ||
@@ -110,6 +115,9 @@ void HesaiDecoderWrapper::process_cloud_packet(
     current_scan_msg_->packets.emplace_back(std::move(pandar_packet_msg));
   }
 
+  auto t2 = std::chrono::steady_clock::now();
+  counter.contribute("copy_into_scanmsg_ns", t2 - t1);
+
   std::tuple<nebula::drivers::NebulaPointCloudPtr, double> pointcloud_ts{};
   nebula::drivers::NebulaPointCloudPtr pointcloud = nullptr;
   {
@@ -118,13 +126,16 @@ void HesaiDecoderWrapper::process_cloud_packet(
     pointcloud = std::get<0>(pointcloud_ts);
   }
 
+  auto t3 = std::chrono::steady_clock::now();
+  counter.contribute("decode_ns", t3 - t2);
+
   // A pointcloud is only emitted when a scan completes (e.g. 3599 packets do not emit, the 3600th
   // emits one)
   if (pointcloud == nullptr) {
     // Since this ends the function early, the `cloud_watchdog_` will not be updated.
     // Thus, if pointclouds are not emitted for too long (e.g. when decoder settings are wrong or no
     // packets come in), the watchdog will log a warning automatically
-    return;
+    return false;
   }
 
   cloud_watchdog_->update();
@@ -134,6 +145,9 @@ void HesaiDecoderWrapper::process_cloud_packet(
     packets_pub_->publish(std::move(current_scan_msg_));
     current_scan_msg_ = std::make_unique<pandar_msgs::msg::PandarScan>();
   }
+
+  auto t4 = std::chrono::steady_clock::now();
+  counter.contribute("publish_packets_ns", t4 - t3);
 
   if (
     nebula_points_pub_->get_subscription_count() > 0 ||
@@ -166,6 +180,11 @@ void HesaiDecoderWrapper::process_cloud_packet(
       rclcpp::Time(seconds_to_chrono_nano_seconds(std::get<1>(pointcloud_ts)).count());
     publish_cloud(std::move(ros_pc_msg_ptr), aw_points_ex_pub_);
   }
+
+  auto t5 = std::chrono::steady_clock::now();
+  counter.contribute("publish_points_ns", t5 - t4);
+
+  return true;
 }
 
 void HesaiDecoderWrapper::publish_cloud(

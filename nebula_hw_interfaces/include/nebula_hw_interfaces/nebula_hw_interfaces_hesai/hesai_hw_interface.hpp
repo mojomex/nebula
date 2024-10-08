@@ -107,7 +107,7 @@ const uint16_t MTU_SIZE = 1500;
 /// small to bridge scheduling and processing delays, packets will be dropped. This corresponds to
 /// the net.core.rmem_default setting in Linux. The current value is hardcoded to accommodate one
 /// pointcloud worth of OT128 packets (currently the highest data rate sensor supported).
-const size_t UDP_SOCKET_BUFFER_SIZE = MTU_SIZE * 3600;
+const size_t UDP_SOCKET_BUFFER_SIZE = 0x10000000;  // 250 MiB
 
 // Time interval between Announce messages, in units of log seconds (default: 1)
 const int PTP_LOG_ANNOUNCE_INTERVAL = 1;

@@ -16,6 +16,7 @@
 
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
 #include "nebula_hw_interfaces/nebula_hw_interfaces_hesai/hesai_hw_interface.hpp"
+#include "nebula_ros/common/counters.hpp"
 #include "nebula_ros/common/watchdog_timer.hpp"
 
 #include <nebula_common/hesai/hesai_common.hpp>
@@ -39,7 +40,8 @@ public:
     const std::shared_ptr<const nebula::drivers::HesaiCalibrationConfigurationBase> & calibration,
     bool publish_packets);
 
-  void process_cloud_packet(std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg);
+  bool process_cloud_packet(
+    std::unique_ptr<nebula_msgs::msg::NebulaPacket> packet_msg, Counter & counter);
 
   void on_config_change(
     const std::shared_ptr<const nebula::drivers::HesaiSensorConfiguration> & new_config);

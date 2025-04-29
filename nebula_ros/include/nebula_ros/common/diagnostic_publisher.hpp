@@ -31,9 +31,10 @@ namespace nebula::ros
 
 class DiagnosticPublisher
 {
-  DiagnosticPublisher(rclcpp::Node & node, std::string hardware_id, std::string frame_id)
-  : publisher_(node.create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 1)),
-    clock_(node.get_clock()),
+  DiagnosticPublisher(
+    const rclcpp::Node::SharedPtr & node, std::string hardware_id, std::string frame_id)
+  : publisher_(node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 1)),
+    node_(node),
     hardware_id_(std::move(hardware_id)),
     frame_id_(std::move(frame_id))
   {
@@ -45,7 +46,8 @@ class DiagnosticPublisher
    * @brief Ensures correct hardware and frame ID and timestamp of `msg`, then publishes it.
    *
    * Hardware and frame ID are overwritten by the values this publisher has been initialized
-   * with.
+   * with. The names of all `DiagnosticStatus`es are prefixed with the node's fully qualified
+   * name, e.g. `my_status` --> `/my/node/name: my_status`.
    * If the header timestamp of `msg` is all zero, the current time is used. Otherwise, the
    * timestamp is preserved.
    *
@@ -54,12 +56,13 @@ class DiagnosticPublisher
   void publish(diagnostic_msgs::msg::DiagnosticArray & msg)
   {
     if (msg.header.stamp == builtin_interfaces::msg::Time{}) {
-      msg.header.stamp = clock_->now();
+      msg.header.stamp = node_->get_clock()->now();
     }
 
     msg.header.frame_id = frame_id_;
     for (auto & status : msg.status) {
       status.hardware_id = hardware_id_;
+      status.name = node_->get_fully_qualified_name() + std::string(": ") + status.name;
     }
 
     publisher_->publish(msg);
@@ -67,7 +70,7 @@ class DiagnosticPublisher
 
 private:
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr publisher_;
-  rclcpp::Clock::SharedPtr clock_;
+  rclcpp::Node::SharedPtr node_;
   std::string hardware_id_;
   std::string frame_id_;
 };

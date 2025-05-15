@@ -29,6 +29,11 @@
 namespace nebula::ros
 {
 
+/**
+ * @brief Ensure validity of DiagnosticArray messages and publish them.
+ *
+ * This publisher fills in hardware and frame IDs, and if unset, adds a timestamp.
+ */
 class DiagnosticPublisher
 {
   DiagnosticPublisher(

@@ -65,14 +65,6 @@ void HesaiHwMonitorWrapper::initialize_hesai_diagnostics(
     "hesai_temperature", this, &HesaiHwMonitorWrapper::hesai_check_temperature);
   diagnostic_updater.add("hesai_rpm", this, &HesaiHwMonitorWrapper::hesai_check_rpm);
 
-  current_status_.reset();
-  current_status_time_ = std::make_unique<rclcpp::Time>(parent_node_->get_clock()->now());
-  current_diag_status_ = diagnostic_msgs::msg::DiagnosticStatus::STALE;
-
-  current_monitor_.reset();
-  current_lidar_monitor_time_ = std::make_unique<rclcpp::Time>(parent_node_->get_clock()->now());
-  current_monitor_status_ = diagnostic_msgs::msg::DiagnosticStatus::STALE;
-
   auto fetch_diag_from_sensor = [this, monitor_enabled]() {
     on_hesai_status_timer();
 
@@ -120,7 +112,6 @@ void HesaiHwMonitorWrapper::on_hesai_status_timer()
   RCLCPP_DEBUG_STREAM(logger_, "on_hesai_status_timer" << std::endl);
   try {
     auto result = hw_interface_->get_lidar_status();
-    std::scoped_lock lock(mtx_lidar_status_);
     current_status_time_ = std::make_unique<rclcpp::Time>(parent_node_->get_clock()->now());
     current_status_ = result;
   } catch (const std::system_error & error) {
@@ -141,7 +132,6 @@ void HesaiHwMonitorWrapper::on_hesai_lidar_monitor_timer_http()
   RCLCPP_DEBUG_STREAM(logger_, "on_hesai_lidar_monitor_timer_http");
   try {
     hw_interface_->get_lidar_monitor_async_http([this](const std::string & str) {
-      std::scoped_lock lock(mtx_lidar_monitor_);
       current_lidar_monitor_time_ =
         std::make_unique<rclcpp::Time>(parent_node_->get_clock()->now());
       current_lidar_monitor_tree_ =
@@ -167,7 +157,6 @@ void HesaiHwMonitorWrapper::on_hesai_lidar_monitor_timer()
   RCLCPP_DEBUG_STREAM(logger_, "on_hesai_lidar_monitor_timer");
   try {
     auto result = hw_interface_->get_lidar_monitor();
-    std::scoped_lock lock(mtx_lidar_monitor_);
     current_lidar_monitor_time_ = std::make_unique<rclcpp::Time>(parent_node_->get_clock()->now());
     current_monitor_ = std::make_shared<HesaiLidarMonitor>(result);
   } catch (const std::system_error & error) {
@@ -187,7 +176,6 @@ void HesaiHwMonitorWrapper::on_hesai_lidar_monitor_timer()
 void HesaiHwMonitorWrapper::hesai_check_status(
   diagnostic_updater::DiagnosticStatusWrapper & diagnostics)
 {
-  std::scoped_lock lock(mtx_lidar_status_);
   if (current_status_) {
     json data = current_status_->to_json();
     for (const auto & [key, value] : data.items()) {
@@ -210,7 +198,6 @@ void HesaiHwMonitorWrapper::hesai_check_ptp(
 {
   uint8_t level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
   std::string msg = "not synchronized";
-  std::scoped_lock lock(mtx_lidar_status_);
   if (current_status_) {
     json data = current_status_->to_json();
     for (const auto & [key, value] : data.items()) {

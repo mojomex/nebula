@@ -88,21 +88,6 @@ private:
   uint16_t diag_span_;
   rclcpp::TimerBase::SharedPtr fetch_diagnostics_timer_{};
 
-  std::shared_ptr<HesaiLidarStatusBase> current_status_{};
-  std::shared_ptr<HesaiLidarMonitor> current_monitor_{};
-  std::shared_ptr<HesaiConfigBase> current_config_{};
-  std::shared_ptr<boost::property_tree::ptree> current_lidar_monitor_tree_{};
-
-  std::unique_ptr<rclcpp::Time> current_status_time_{};
-  std::unique_ptr<rclcpp::Time> current_config_time_{};
-  std::unique_ptr<rclcpp::Time> current_lidar_monitor_time_{};
-
-  uint8_t current_diag_status_;
-  uint8_t current_monitor_status_;
-
-  std::mutex mtx_lidar_status_;
-  std::mutex mtx_lidar_monitor_;
-
   const std::string MSG_NOT_SUPPORTED_ = "Not supported";
   const std::string MSG_ERROR_ = "Error";
   const std::string MSG_SEP_ = ": ";

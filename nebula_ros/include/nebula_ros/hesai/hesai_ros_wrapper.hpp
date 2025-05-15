@@ -17,6 +17,7 @@
 #include "nebula_common/hesai/hesai_common.hpp"
 #include "nebula_common/nebula_common.hpp"
 #include "nebula_common/nebula_status.hpp"
+#include "nebula_ros/common/diagnostic_publisher.hpp"
 #include "nebula_ros/hesai/decoder_wrapper.hpp"
 #include "nebula_ros/hesai/hw_interface_wrapper.hpp"
 #include "nebula_ros/hesai/hw_monitor_wrapper.hpp"
@@ -110,7 +111,7 @@ private:
   std::optional<HesaiHwMonitorWrapper> hw_monitor_wrapper_;
   std::optional<HesaiDecoderWrapper> decoder_wrapper_;
 
-  diagnostic_updater::Updater diagnostic_updater_;
+  std::optional<DiagnosticPublisher> diagnostic_publisher_;
 
   std::mutex mtx_config_;
 

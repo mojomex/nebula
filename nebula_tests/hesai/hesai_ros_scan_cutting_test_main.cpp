@@ -67,9 +67,8 @@ TEST_P(ScanCuttingTest, FovAlignment)
   // tests would thus fail)
   int skip_first = 2;
 
-  auto scan_callback = [&](uint64_t, uint64_t, nebula::drivers::NebulaPointCloudPtr pointcloud) {
-    if (!pointcloud) return;
-
+  auto scan_callback = [&](
+                         uint64_t, uint64_t, const nebula::drivers::NebulaPointCloud & pointcloud) {
     if (skip_first > 0) {
       skip_first--;
       return;
@@ -79,7 +78,7 @@ TEST_P(ScanCuttingTest, FovAlignment)
     std::map<uint16_t, bool> has_points_near_start;
     std::map<uint16_t, bool> has_points_near_end;
 
-    for (const drivers::NebulaPoint & p : pointcloud->points) {
+    for (const drivers::NebulaPoint & p : pointcloud.points) {
       none_outside_fov &= drivers::angle_is_between(fov_min_rad, fov_max_rad, p.azimuth);
 
       if (has_points_near_start.find(p.channel) == has_points_near_start.end()) {

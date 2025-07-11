@@ -243,7 +243,7 @@ private:
         point.elevation = corrected_angle_data.elevation_rad;
 
         if (!mask_filter_ || !mask_filter_->excluded(point)) {
-          frame.pointcloud->emplace_back(point);
+          frame.pointcloud.emplace_back(point);
         }
       }
     }
@@ -272,8 +272,8 @@ private:
 
   [[nodiscard]] DecodeFrame initialize_frame() const
   {
-    DecodeFrame frame = {0, std::make_shared<NebulaPointCloud>(), std::nullopt};
-    frame.pointcloud->reserve(SensorT::max_scan_buffer_points);
+    DecodeFrame frame = {0, {}, std::nullopt};
+    frame.pointcloud.reserve(SensorT::max_scan_buffer_points);
 
     if (blockage_mask_params_) {
       frame.blockage_mask = point_filters::BlockageMask(
@@ -291,7 +291,7 @@ private:
       frame_callback_(output_frame_);
     }
 
-    output_frame_.pointcloud->clear();
+    output_frame_.pointcloud.clear();
 
     if (output_frame_.blockage_mask) {
       output_frame_.blockage_mask->clear();
@@ -383,7 +383,7 @@ public:
           // already been swapped and published before the timestamp reset angle is reached. Thus,
           // the `decode` pointcloud is now empty and will be decoded to. Reset its timestamp.
           decode_frame_.timestamp_ns = new_frame_timestamp_ns;
-          decode_frame_.pointcloud->clear();
+          decode_frame_.pointcloud.clear();
         } else {
           // When not cutting at the end of the FoV (i.e. the FoV is 360 deg or a cut occurs
           // somewhere within a non-360 deg FoV), the current scan is still being decoded to the

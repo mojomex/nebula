@@ -45,7 +45,7 @@ struct PacketMetadata
 struct DecodeFrame
 {
   uint64_t timestamp_ns{0};
-  NebulaPointCloudPtr pointcloud;
+  NebulaPointCloud pointcloud;
   std::optional<point_filters::BlockageMask> blockage_mask;
 };
 

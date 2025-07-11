@@ -210,7 +210,7 @@ Status HesaiRosOfflineExtractSample::read_bag()
               << bag_message->time_stamp << std::endl;
 
     drivers::HesaiScanDecoder::frame_callback_t frame_cb = [&](const drivers::DecodeFrame & frame) {
-      const auto & pointcloud = *frame.pointcloud;
+      const auto & pointcloud = frame.pointcloud;
       auto fn = std::to_string(bag_message->time_stamp) + ".pcd";
       writer.writeBinary((o_dir / fn).string(), pointcloud);
     };

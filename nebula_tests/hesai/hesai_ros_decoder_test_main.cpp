@@ -51,26 +51,24 @@ TEST_P(DecoderTest, TestPcd)
   rcpputils::fs::path bag_dir(hesai_driver_->params_.bag_path);
   rcpputils::fs::path pcd_dir = bag_dir.parent_path();
 
-  auto ref_pointcloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  auto ref_pointcloud = pcl::PointCloud<pcl::PointXYZ>{};
   int check_cnt = 0;
 
   auto scan_callback = [&](
                          uint64_t msg_timestamp, uint64_t /*scan_timestamp*/,
-                         nebula::drivers::NebulaPointCloudPtr pointcloud) {
-    if (!pointcloud) return;
-
+                         const nebula::drivers::NebulaPointCloud & pointcloud) {
     auto fn = std::to_string(msg_timestamp) + ".pcd";
 
     auto target_pcd_path = (pcd_dir / fn);
     RCLCPP_DEBUG_STREAM(*logger_, target_pcd_path);
     if (target_pcd_path.exists()) {
       RCLCPP_DEBUG_STREAM(*logger_, "exists: " << target_pcd_path);
-      auto rt = pcd_reader.read(target_pcd_path.string(), *ref_pointcloud);
+      auto rt = pcd_reader.read(target_pcd_path.string(), ref_pointcloud);
       RCLCPP_DEBUG_STREAM(*logger_, rt << " loaded: " << target_pcd_path);
       check_pcds(pointcloud, ref_pointcloud);
       check_cnt++;
       // ref_pointcloud.reset(new nebula::drivers::NebulaPointCloud);
-      ref_pointcloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+      ref_pointcloud = pcl::PointCloud<pcl::PointXYZ>{};
     }
   };
 
@@ -90,8 +88,7 @@ TEST_P(DecoderTest, TestTimezone)
 
   auto scan_callback = [&](
                          uint64_t /*msg_timestamp*/, uint64_t scan_timestamp,
-                         nebula::drivers::NebulaPointCloudPtr pointcloud) {
-    if (!pointcloud) return;
+                         const nebula::drivers::NebulaPointCloud & /* pointcloud */) {
     decoded_timestamps.push_back(scan_timestamp);
   };
 

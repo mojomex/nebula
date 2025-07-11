@@ -31,14 +31,14 @@ namespace nebula::test
 {
 
 inline void check_pcds(
-  nebula::drivers::NebulaPointCloudPtr pc, pcl::PointCloud<pcl::PointXYZ>::Ptr pc_ref)
+  const nebula::drivers::NebulaPointCloud & pc, const pcl::PointCloud<pcl::PointXYZ> & pc_ref)
 {
-  ASSERT_GT(pc->points.size(), 0);
-  EXPECT_EQ(pc->points.size(), pc_ref->points.size());
-  auto bound = std::min(pc->points.size(), pc_ref->points.size());
+  ASSERT_GT(pc.points.size(), 0);
+  EXPECT_EQ(pc.points.size(), pc_ref.points.size());
+  auto bound = std::min(pc.points.size(), pc_ref.points.size());
   for (uint32_t i = 0; i < bound; i++) {
-    auto p = pc->points[i];
-    auto p_ref = pc_ref->points[i];
+    auto p = pc.points[i];
+    auto p_ref = pc_ref.points[i];
 
     EXPECT_FLOAT_EQ(p.x, p_ref.x);
     EXPECT_FLOAT_EQ(p.y, p_ref.y);
@@ -52,12 +52,12 @@ inline void check_pcds(
 }
 
 inline void check_pcds(
-  nebula::drivers::NebulaPointCloudPtr pp1, nebula::drivers::NebulaPointCloudPtr pp2)
+  const nebula::drivers::NebulaPointCloud & pp1, const nebula::drivers::NebulaPointCloud & pp2)
 {
-  EXPECT_EQ(pp1->points.size(), pp2->points.size());
-  for (uint32_t i = 0; i < pp1->points.size(); i++) {
-    auto p1 = pp1->points[i];
-    auto p2 = pp2->points[i];
+  EXPECT_EQ(pp1.points.size(), pp2.points.size());
+  for (uint32_t i = 0; i < pp1.points.size(); i++) {
+    auto p1 = pp1.points[i];
+    auto p2 = pp2.points[i];
     EXPECT_FLOAT_EQ(p1.x, p2.x);
     EXPECT_FLOAT_EQ(p1.y, p2.y);
     EXPECT_FLOAT_EQ(p1.z, p2.z);

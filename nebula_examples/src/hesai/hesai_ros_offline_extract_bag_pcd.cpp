@@ -271,7 +271,7 @@ Status HesaiRosOfflineExtractBag::read_bag()
     }
 
     drivers::HesaiScanDecoder::frame_callback_t frame_cb = [&](const drivers::DecodeFrame & frame) {
-      const auto & pointcloud = *frame.pointcloud;
+      const auto & pointcloud = frame.pointcloud;
       auto fn = std::to_string(bag_message->time_stamp) + ".pcd";
 
       cnt++;

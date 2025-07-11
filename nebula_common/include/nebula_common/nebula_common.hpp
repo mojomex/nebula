@@ -767,13 +767,13 @@ inline std::ostream & operator<<(std::ostream & os, nebula::drivers::PtpSwitchTy
 }
 
 [[maybe_unused]] pcl::PointCloud<PointXYZIR>::Ptr convert_point_xyziradt_to_point_xyzir(
-  const pcl::PointCloud<PointXYZIRADT>::ConstPtr & input_pointcloud);
+  const pcl::PointCloud<PointXYZIRADT> & input_pointcloud);
 
 [[maybe_unused]] pcl::PointCloud<PointXYZIR>::Ptr convert_point_xyzircaedt_to_point_xyzir(
-  const pcl::PointCloud<PointXYZIRCAEDT>::ConstPtr & input_pointcloud);
+  const pcl::PointCloud<PointXYZIRCAEDT> & input_pointcloud);
 
 pcl::PointCloud<PointXYZIRADT>::Ptr convert_point_xyzircaedt_to_point_xyziradt(
-  const pcl::PointCloud<PointXYZIRCAEDT>::ConstPtr & input_pointcloud, double stamp);
+  const pcl::PointCloud<PointXYZIRCAEDT> & input_pointcloud, double stamp);
 
 /// @brief Converts degrees to radians
 /// @param radians

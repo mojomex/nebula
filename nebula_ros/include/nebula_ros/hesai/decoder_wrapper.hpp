@@ -18,6 +18,7 @@
 #include "nebula_decoders/nebula_decoders_hesai/hesai_driver.hpp"
 #include "nebula_ros/common/agnocast_wrapper/nebula_agnocast_wrapper.hpp"
 #include "nebula_ros/common/diagnostics/rate_bound_status.hpp"
+#include "nebula_ros/common/single_consumer_processor.hpp"
 #include "nebula_ros/hesai/diagnostics/functional_safety_diagnostic_task.hpp"
 #include "nebula_ros/hesai/diagnostics/packet_loss_diagnostic.hpp"
 
@@ -47,6 +48,9 @@ public:
     const std::shared_ptr<const nebula::drivers::HesaiCalibrationConfigurationBase> & calibration,
     diagnostic_updater::Updater & diagnostic_updater, bool publish_packets);
 
+  /// @brief Destructor
+  ~HesaiDecoderWrapper();
+
   /// @brief Process a cloud packet and return metadata
   /// @param packet_msg The packet to process
   /// @return Expected containing metadata on success, or decode error on failure
@@ -68,6 +72,10 @@ private:
   void publish_cloud(
     NEBULA_MESSAGE_UNIQUE_PTR(sensor_msgs::msg::PointCloud2) && pointcloud,
     const NEBULA_PUBLISHER_PTR(sensor_msgs::msg::PointCloud2) & publisher);
+
+  /// @brief Process a decoded frame (called by the consumer thread)
+  /// @param frame The decoded frame to process
+  void publish_frame(const drivers::DecodeFrame & frame);
 
   /// @brief Convert seconds to chrono::nanoseconds
   /// @param seconds
@@ -141,5 +149,8 @@ private:
   custom_diagnostic_tasks::RateBoundStatus publish_diagnostic_;
   std::optional<FunctionalSafetyDiagnosticTask> functional_safety_diagnostic_;
   std::optional<PacketLossDiagnosticTask> packet_loss_diagnostic_;
+
+  /// @brief Processor for handling decoded frames in a separate thread
+  std::unique_ptr<SingleConsumerProcessor<drivers::DecodeFrame>> frame_processor_;
 };
 }  // namespace nebula::ros

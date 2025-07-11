@@ -84,7 +84,19 @@ HesaiDecoderWrapper::HesaiDecoderWrapper(
 
   RCLCPP_INFO_STREAM(logger_, ". Wrapper=" << status_);
 
+  // Initialize the frame processor with a callback to process_frame
+  frame_processor_ = std::make_unique<SingleConsumerProcessor<drivers::DecodeFrame>>(
+    [this](const drivers::DecodeFrame & frame) { publish_frame(frame); }, 1);
+
   diagnostic_updater.add(publish_diagnostic_);
+}
+
+HesaiDecoderWrapper::~HesaiDecoderWrapper()
+{
+  // Stop the frame processor to ensure clean shutdown
+  if (frame_processor_) {
+    frame_processor_->stop();
+  }
 }
 
 void HesaiDecoderWrapper::on_config_change(
@@ -128,6 +140,13 @@ HesaiDecoderWrapper::process_cloud_packet(
 
 void HesaiDecoderWrapper::on_frame_decoded(const drivers::DecodeFrame & frame)
 {
+  if (frame_processor_) {
+    frame_processor_->push(drivers::DecodeFrame(frame));
+  }
+}
+
+void HesaiDecoderWrapper::publish_frame(const drivers::DecodeFrame & frame)
+{
   // Publish scan message only if it has been written to
   if (current_scan_msg_ && !current_scan_msg_->packets.empty()) {
     packets_pub_->publish(std::move(current_scan_msg_));
@@ -135,11 +154,11 @@ void HesaiDecoderWrapper::on_frame_decoded(const drivers::DecodeFrame & frame)
   }
 
   rclcpp::Time frame_stamp = rclcpp::Time(static_cast<int64_t>(frame.timestamp_ns));
-  const drivers::NebulaPointCloudPtr & pointcloud = frame.pointcloud;
+  const drivers::NebulaPointCloud & pointcloud = frame.pointcloud;
 
   if (NEBULA_HAS_ANY_SUBSCRIPTIONS(nebula_points_pub_)) {
     auto ros_pc_msg_ptr = ALLOCATE_OUTPUT_MESSAGE_UNIQUE(nebula_points_pub_);
-    pcl::toROSMsg(*pointcloud, *ros_pc_msg_ptr);
+    pcl::toROSMsg(pointcloud, *ros_pc_msg_ptr);
     ros_pc_msg_ptr->header.stamp = frame_stamp;
     publish_cloud(std::move(ros_pc_msg_ptr), nebula_points_pub_);
   }

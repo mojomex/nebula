@@ -117,6 +117,24 @@ if(BUILD_TESTING)
     nebula_velodyne_common::nebula_velodyne_common
     nebula_velodyne_decoders::nebula_velodyne_decoders
     diagnostic_updater::diagnostic_updater)
+
+  # Smoke tests for all Velodyne sensor models
+  foreach(
+    MODEL
+    VLP16
+    VLP32
+    VLS128)
+    string(TOLOWER ${MODEL}_smoke_test test_name)
+    add_ros_test(
+      ${PROJECT_SOURCE_DIR}/../../nebula_core/nebula_core_ros/test/smoke_test.py
+      TARGET
+      ${test_name}
+      ARGS
+      "launch_file_path:=${PROJECT_SOURCE_DIR}/launch/velodyne_launch_all_hw.xml"
+      "sensor_model:=${MODEL}"
+      TIMEOUT
+      "10")
+  endforeach()
 endif()
 
 if(BUILD_EXAMPLES)

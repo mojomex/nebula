@@ -153,6 +153,23 @@ if(BUILD_TESTING)
     nebula_continental_decoders::nebula_continental_decoders
     diagnostic_updater::diagnostic_updater)
 
+  # Smoke tests for all Continental sensor models
+  foreach(
+    MODEL
+    ARS548
+    SRR520)
+    string(TOLOWER ${MODEL}_smoke_test test_name)
+    add_ros_test(
+      ${PROJECT_SOURCE_DIR}/../../nebula_core/nebula_core_ros/test/smoke_test.py
+      TARGET
+      ${test_name}
+      ARGS
+      "launch_file_path:=${PROJECT_SOURCE_DIR}/launch/continental_launch_all_hw.xml"
+      "sensor_model:=${MODEL}"
+      TIMEOUT
+      "10")
+  endforeach()
+
   install(DIRECTORY test_resources DESTINATION share/${PROJECT_NAME})
 endif()
 

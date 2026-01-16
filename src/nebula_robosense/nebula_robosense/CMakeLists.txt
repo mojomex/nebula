@@ -44,6 +44,27 @@ install(
   LIBRARY DESTINATION lib)
 install(DIRECTORY include/${PROJECT_NAME}/ DESTINATION include/${PROJECT_NAME})
 
+if(BUILD_TESTING)
+  find_package(ros_testing REQUIRED)
+
+  # Smoke tests for all Robosense sensor models
+  foreach(
+    MODEL
+    Helios
+    Bpearl)
+    string(TOLOWER ${MODEL}_smoke_test test_name)
+    add_ros_test(
+      ${PROJECT_SOURCE_DIR}/../../nebula_core/nebula_core_ros/test/smoke_test.py
+      TARGET
+      ${test_name}
+      ARGS
+      "launch_file_path:=${PROJECT_SOURCE_DIR}/launch/robosense_launch_all_hw.xml"
+      "sensor_model:=${MODEL}"
+      TIMEOUT
+      "10")
+  endforeach()
+endif()
+
 install(DIRECTORY config launch schema DESTINATION share/${PROJECT_NAME})
 
 ament_export_include_directories("include/${PROJECT_NAME}")

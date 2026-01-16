@@ -4,11 +4,11 @@ from launch import LaunchContext
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.actions import OpaqueFunction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 import launch_testing
 import launch_testing.actions
 import launch_testing.asserts
+from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 import pytest
 
 
@@ -18,7 +18,7 @@ def resolve_launch_file(context: LaunchContext, *args, **kwargs):
 
     return [
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(launch_file_path),
+            XMLLaunchDescriptionSource(launch_file_path),
             launch_arguments=[("sensor_model", sensor_model), ("launch_hw", "false")],
         )
     ]

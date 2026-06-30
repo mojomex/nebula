@@ -78,7 +78,7 @@ private:
 
 public:
   static constexpr float min_range = 1.f;
-  static constexpr float max_range = 180.0f;
+  static constexpr float max_range = 1000.0f;
   static constexpr size_t max_scan_buffer_points = 307200;
   static constexpr FieldOfView<int32_t, MilliDegrees> fov_mdeg{
     {30'000, 150'000}, {-12'500, 12'900}};

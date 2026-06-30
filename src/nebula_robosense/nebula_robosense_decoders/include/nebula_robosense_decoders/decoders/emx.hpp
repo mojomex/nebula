@@ -218,7 +218,7 @@ public:
   static constexpr bool has_custom_projection = true;
   typedef AngleCorrectorEMX angle_corrector_t;
   static constexpr float min_range = 0.5f;
-  static constexpr float max_range = 350.f;
+  static constexpr float max_range = 1000.f;
   static constexpr size_t max_scan_buffer_points = 288000;
 
   ReturnMode get_return_mode(const robosense_packet::emx::CombinedInfo & info_packet) override

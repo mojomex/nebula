@@ -128,7 +128,7 @@ public:
   typedef AngleCorrector angle_corrector_t;
 
   static constexpr float min_range = 0.2f;
-  static constexpr float max_range = 200.f;
+  static constexpr float max_range = 1000.f;
   static constexpr size_t max_scan_buffer_points = 260000;
 
   ReturnMode get_return_mode(const robosense_packet::e1::InfoPacket & /*info_packet*/) override

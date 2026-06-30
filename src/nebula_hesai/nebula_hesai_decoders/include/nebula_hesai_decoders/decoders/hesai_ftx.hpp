@@ -74,7 +74,7 @@ public:
   using correction_data_t = HesaiCalibrationConfiguration;
 
   static constexpr float min_range = 0.05;
-  static constexpr float max_range = 300.0;  // Depending on mode
+  static constexpr float max_range = 1000.0;  // Range filtering is controlled by configuration.
   static constexpr int32_t col_N = 256;
   static constexpr int32_t row_N = 192;
   static constexpr size_t max_scan_buffer_points = col_N * row_N * 2;  // For dual return
@@ -137,7 +137,7 @@ public:
   using correction_data_t = HesaiCalibrationConfiguration;
 
   static constexpr float min_range = 0.05;
-  static constexpr float max_range = 300.0;
+  static constexpr float max_range = 1000.0;
   static constexpr int32_t col_N = 224;  // 192x224 channel array
   static constexpr int32_t row_N = 192;
   static constexpr size_t max_scan_buffer_points = col_N * row_N * 2;

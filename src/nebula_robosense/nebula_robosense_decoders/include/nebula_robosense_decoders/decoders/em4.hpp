@@ -240,7 +240,7 @@ public:
   static constexpr bool has_custom_projection = true;
   typedef AngleCorrectorEM4 angle_corrector_t;
   static constexpr float min_range = 0.2f;
-  static constexpr float max_range = 300.f;
+  static constexpr float max_range = 1000.f;
   static constexpr size_t max_scan_buffer_points = 1248000;
 
   ReturnMode get_return_mode(const robosense_packet::em4::CombinedInfo & info) override

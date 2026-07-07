@@ -117,6 +117,11 @@ public:
     reader_.open(storage_options, {"cdr", "cdr"});
   }
 
+  std::vector<rosbag2_storage::TopicMetadata> topics() const
+  {
+    return reader_.get_all_topics_and_types();
+  }
+
   bool has_next() { return reader_.has_next(); }
 
   std::shared_ptr<rosbag2_storage::SerializedBagMessage> read_next()
@@ -135,9 +140,13 @@ private:
 class McapPointcloudWriter
 {
 public:
-  explicit McapPointcloudWriter(const fs::path & output_path)
+  McapPointcloudWriter(const fs::path & output_path, bool force)
   {
     if (fs::exists(output_path)) {
+      if (!force) {
+        throw std::runtime_error(
+          "Output already exists: " + output_path.string() + " (pass --force to overwrite)");
+      }
       fs::remove_all(output_path);
     }
     if (!output_path.parent_path().empty()) {
@@ -207,6 +216,22 @@ struct SensorSpec
   uint16_t rotation_speed{600};
   std::string return_mode;
 };
+
+std::string infer_robosense_info_topic(const std::string & packet_topic)
+{
+  constexpr const char * packet_suffix = "/robosense_packets";
+  constexpr const char * info_suffix = "/robosense_info_packets";
+  if (
+    packet_topic.size() >= std::char_traits<char>::length(packet_suffix) &&
+    packet_topic.compare(
+      packet_topic.size() - std::char_traits<char>::length(packet_suffix),
+      std::char_traits<char>::length(packet_suffix), packet_suffix) == 0) {
+    return packet_topic.substr(
+             0, packet_topic.size() - std::char_traits<char>::length(packet_suffix)) +
+           info_suffix;
+  }
+  return packet_topic + "_info";
+}
 
 std::vector<SensorSpec> make_specs()
 {
@@ -514,11 +539,18 @@ struct Options
   fs::path input_bag;
   fs::path output_mcap;
   std::optional<fs::path> calibration_root;
+  std::vector<std::string> topics;
+  std::optional<std::string> info_topic;
+  bool force{false};
 };
 
 void print_usage(const char * argv0)
 {
-  std::cerr << "Usage: " << argv0 << " INPUT_ROSBAG_DIR OUTPUT_MCAP [--calibration-root PATH]\n";
+  std::cerr
+    << "Usage: " << argv0
+    << " INPUT_ROSBAG_DIR OUTPUT_MCAP [--topic PACKETS_TOPIC] [--info-topic INFO_TOPIC]\n"
+    << "       " << argv0 << " INPUT_ROSBAG_DIR OUTPUT_MCAP --force [--calibration-root PATH]\n"
+    << "  With multiple selected packet topics, OUTPUT_MCAP is used as a parent directory.\n";
 }
 
 Options parse_args(int argc, char ** argv)
@@ -537,6 +569,12 @@ Options parse_args(int argc, char ** argv)
 
     if (arg == "--calibration-root") {
       options.calibration_root = fs::path(need_value(arg));
+    } else if (arg == "--topic") {
+      options.topics.push_back(need_value(arg));
+    } else if (arg == "--info-topic") {
+      options.info_topic = need_value(arg);
+    } else if (arg == "--force") {
+      options.force = true;
     } else if (arg == "--help" || arg == "-h") {
       print_usage(argv[0]);
       std::exit(0);
@@ -552,6 +590,9 @@ Options parse_args(int argc, char ** argv)
   }
   options.input_bag = positional[0];
   options.output_mcap = positional[1];
+  if (options.info_topic && options.topics.size() != 1) {
+    throw std::runtime_error("--info-topic requires exactly one --topic");
+  }
   return options;
 }
 
@@ -574,25 +615,84 @@ fs::path infer_calibration_root(
   throw std::runtime_error("Could not infer calibration root; pass --calibration-root PATH");
 }
 
-std::vector<std::shared_ptr<Handler>> make_handlers(
-  const fs::path & input_bag, const fs::path & calibration_root, McapPointcloudWriter & writer)
+std::shared_ptr<Handler> make_handler(
+  const fs::path & input_bag, const fs::path & calibration_root, const SensorSpec & spec,
+  McapPointcloudWriter & writer)
 {
-  std::vector<std::shared_ptr<Handler>> handlers;
-  for (const auto & spec : make_specs()) {
-    writer.create_topic(pointcloud_topic(spec));
-    switch (spec.vendor) {
-      case Vendor::Hesai:
-        handlers.push_back(make_hesai_handler(spec, calibration_root, writer));
-        break;
-      case Vendor::Robosense:
-        handlers.push_back(make_robosense_handler(input_bag, spec, writer));
-        break;
-      case Vendor::Seyond:
-        handlers.push_back(make_seyond_handler(spec, calibration_root, writer));
-        break;
-    }
+  writer.create_topic(pointcloud_topic(spec));
+  switch (spec.vendor) {
+    case Vendor::Hesai:
+      return make_hesai_handler(spec, calibration_root, writer);
+    case Vendor::Robosense:
+      return make_robosense_handler(input_bag, spec, writer);
+    case Vendor::Seyond:
+      return make_seyond_handler(spec, calibration_root, writer);
   }
-  return handlers;
+  throw std::runtime_error("Unsupported sensor vendor");
+}
+
+std::vector<SensorSpec> select_specs(
+  const Options & options, const std::vector<std::string> & bag_topics)
+{
+  const auto specs = make_specs();
+  std::vector<SensorSpec> selected;
+  const auto bag_has_topic = [&](const std::string & topic) {
+    return std::find(bag_topics.begin(), bag_topics.end(), topic) != bag_topics.end();
+  };
+
+  if (options.topics.empty()) {
+    for (auto spec : specs) {
+      if (bag_has_topic(spec.packet_topic)) {
+        if (spec.vendor == Vendor::Robosense && spec.info_topic.empty()) {
+          spec.info_topic = infer_robosense_info_topic(spec.packet_topic);
+        }
+        selected.push_back(std::move(spec));
+      }
+    }
+    return selected;
+  }
+
+  for (const auto & topic : options.topics) {
+    const auto found = std::find_if(specs.begin(), specs.end(), [&](const SensorSpec & spec) {
+      return spec.packet_topic == topic;
+    });
+    if (found == specs.end()) {
+      throw std::runtime_error("Unsupported packet topic: " + topic);
+    }
+    if (!bag_has_topic(topic)) {
+      throw std::runtime_error("Packet topic not found in input bag: " + topic);
+    }
+
+    SensorSpec spec = *found;
+    if (spec.vendor == Vendor::Robosense) {
+      spec.info_topic = options.info_topic.value_or(infer_robosense_info_topic(spec.packet_topic));
+      if (!bag_has_topic(spec.info_topic)) {
+        throw std::runtime_error("RoboSense info topic not found in input bag: " + spec.info_topic);
+      }
+    } else if (options.info_topic) {
+      throw std::runtime_error("--info-topic is only valid for RoboSense packet topics");
+    }
+    selected.push_back(std::move(spec));
+  }
+
+  return selected;
+}
+
+struct ActiveConversion
+{
+  SensorSpec spec;
+  fs::path output;
+  std::shared_ptr<McapPointcloudWriter> writer;
+  std::shared_ptr<Handler> handler;
+};
+
+fs::path output_for_spec(
+  const fs::path & output_root, const SensorSpec & spec, size_t selected_count)
+{
+  if (selected_count == 1) {
+    return output_root;
+  }
+  return output_root / spec.frame_id;
 }
 
 int run(int argc, char ** argv)
@@ -606,12 +706,41 @@ int run(int argc, char ** argv)
     rclcpp::init(argc, argv);
     const auto calibration_root =
       infer_calibration_root(options.input_bag, options.calibration_root);
-    McapPointcloudWriter writer(options.output_mcap);
-    const auto handlers = make_handlers(options.input_bag, calibration_root, writer);
+
+    BagReader metadata_reader(options.input_bag);
+    std::vector<std::string> bag_topics;
+    for (const auto & topic : metadata_reader.topics()) {
+      bag_topics.push_back(topic.name);
+    }
+    const auto selected_specs = select_specs(options, bag_topics);
+    if (selected_specs.empty()) {
+      throw std::runtime_error("No supported packet topics found in input bag");
+    }
+    if (
+      selected_specs.size() > 1 && fs::exists(options.output_mcap) &&
+      !fs::is_directory(options.output_mcap)) {
+      if (!options.force) {
+        throw std::runtime_error(
+          "Output path exists and is not a directory: " + options.output_mcap.string() +
+          " (pass --force to overwrite)");
+      }
+      fs::remove_all(options.output_mcap);
+    }
+
+    std::vector<ActiveConversion> conversions;
+    conversions.reserve(selected_specs.size());
+    for (const auto & spec : selected_specs) {
+      const auto output = output_for_spec(options.output_mcap, spec, selected_specs.size());
+      auto writer = std::make_shared<McapPointcloudWriter>(output, options.force);
+      auto handler = make_handler(options.input_bag, calibration_root, spec, *writer);
+      conversions.push_back({spec, output, writer, handler});
+      std::cout << "CONVERT " << spec.packet_topic << " -> " << output
+                << " topic=" << handler->output_topic << std::endl;
+    }
 
     std::unordered_map<std::string, std::shared_ptr<Handler>> by_topic;
-    for (const auto & handler : handlers) {
-      by_topic.emplace(handler->input_topic, handler);
+    for (const auto & conversion : conversions) {
+      by_topic.emplace(conversion.handler->input_topic, conversion.handler);
     }
 
     BagReader reader(options.input_bag);
@@ -627,18 +756,23 @@ int run(int argc, char ** argv)
       found->second->process(*bag_message);
     }
 
-    for (const auto & handler : handlers) {
-      std::cout << "DONE " << handler->input_topic << " -> " << handler->output_topic
-                << " messages=" << handler->stats.input_messages
+    size_t total_clouds = 0;
+    size_t total_points = 0;
+    for (const auto & conversion : conversions) {
+      const auto & handler = conversion.handler;
+      total_clouds += conversion.writer->clouds_written();
+      total_points += conversion.writer->points_written();
+      std::cout << "DONE " << conversion.output << " input=" << handler->input_topic
+                << " output=" << handler->output_topic << " messages=" << handler->stats.input_messages
                 << " packets=" << handler->stats.packets << " info=" << handler->stats.info_packets
                 << " clouds=" << handler->stats.clouds << " points=" << handler->stats.points
                 << std::endl;
     }
-    std::cout << "SUMMARY clouds=" << writer.clouds_written()
-              << " points=" << writer.points_written() << std::endl;
+    std::cout << "SUMMARY sensors=" << conversions.size() << " clouds=" << total_clouds
+              << " points=" << total_points << std::endl;
 
     rclcpp::shutdown();
-    return writer.clouds_written() == 0 ? 1 : 0;
+    return total_clouds == 0 ? 1 : 0;
   } catch (const std::exception & ex) {
     if (rclcpp::ok()) {
       rclcpp::shutdown();

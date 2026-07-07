@@ -18,22 +18,11 @@ find_package(robosense_msgs REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
-if(DEFINED LIBTINS_INCLUDE_DIR AND NOT EXISTS "${LIBTINS_INCLUDE_DIR}")
-  unset(LIBTINS_INCLUDE_DIR CACHE)
-endif()
-if(DEFINED LIBTINS_LIBRARY AND NOT EXISTS "${LIBTINS_LIBRARY}")
-  unset(LIBTINS_LIBRARY CACHE)
-endif()
-find_path(LIBTINS_INCLUDE_DIR NAMES tins/tins.h REQUIRED)
-find_library(LIBTINS_LIBRARY NAMES tins REQUIRED)
-
 add_executable(jari_pcap_to_mcap src/jari_pcap_to_mcap.cpp)
 target_compile_features(jari_pcap_to_mcap PRIVATE cxx_std_17)
-target_include_directories(jari_pcap_to_mcap PRIVATE ${LIBTINS_INCLUDE_DIR})
 target_link_libraries(
   jari_pcap_to_mcap
   PRIVATE
-    ${LIBTINS_LIBRARY}
     nebula_core_common::nebula_core_common
     nebula_core_decoders::nebula_core_decoders
     nebula_core_ros::nebula_core_ros

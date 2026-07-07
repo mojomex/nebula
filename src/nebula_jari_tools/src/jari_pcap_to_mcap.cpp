@@ -32,18 +32,20 @@
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include <tins/tins.h>
-
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -81,45 +83,153 @@ uint64_t seconds_to_ns(double seconds)
     std::min<long double>(ns, static_cast<long double>(std::numeric_limits<uint64_t>::max())));
 }
 
+std::string to_lower(std::string value)
+{
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return value;
+}
+
 struct UdpPayload
 {
   uint64_t timestamp_ns{};
   std::vector<uint8_t> payload;
 };
 
-uint64_t timestamp_to_ns(const Tins::Timestamp & timestamp)
+uint16_t read_be16(const uint8_t * data)
 {
-  return static_cast<uint64_t>(timestamp.seconds()) * 1000000000ULL +
-         static_cast<uint64_t>(timestamp.microseconds()) * 1000ULL;
+  return static_cast<uint16_t>((static_cast<uint16_t>(data[0]) << 8U) | data[1]);
+}
+
+uint32_t read_be32(const uint8_t * data)
+{
+  return (static_cast<uint32_t>(data[0]) << 24U) | (static_cast<uint32_t>(data[1]) << 16U) |
+         (static_cast<uint32_t>(data[2]) << 8U) | data[3];
+}
+
+uint32_t read_u32(const uint8_t * data, bool little_endian)
+{
+  if (little_endian) {
+    return static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8U) |
+           (static_cast<uint32_t>(data[2]) << 16U) | (static_cast<uint32_t>(data[3]) << 24U);
+  }
+  return read_be32(data);
+}
+
+struct FragmentKey
+{
+  uint32_t src{};
+  uint32_t dst{};
+  uint16_t id{};
+  uint8_t protocol{};
+
+  bool operator==(const FragmentKey & other) const
+  {
+    return src == other.src && dst == other.dst && id == other.id && protocol == other.protocol;
+  }
+};
+
+struct FragmentKeyHash
+{
+  size_t operator()(const FragmentKey & key) const
+  {
+    size_t seed = key.src;
+    seed ^= static_cast<size_t>(key.dst) + 0x9e3779b9U + (seed << 6U) + (seed >> 2U);
+    seed ^= static_cast<size_t>(key.id) + 0x9e3779b9U + (seed << 6U) + (seed >> 2U);
+    seed ^= static_cast<size_t>(key.protocol) + 0x9e3779b9U + (seed << 6U) + (seed >> 2U);
+    return seed;
+  }
+};
+
+struct FragmentStream
+{
+  std::vector<uint8_t> data;
+  std::vector<std::pair<size_t, size_t>> ranges;
+  std::optional<size_t> total_size;
+};
+
+void add_range(FragmentStream & stream, size_t begin, size_t end)
+{
+  stream.ranges.emplace_back(begin, end);
+  std::sort(stream.ranges.begin(), stream.ranges.end());
+
+  std::vector<std::pair<size_t, size_t>> merged;
+  for (const auto & range : stream.ranges) {
+    if (merged.empty() || range.first > merged.back().second) {
+      merged.push_back(range);
+    } else {
+      merged.back().second = std::max(merged.back().second, range.second);
+    }
+  }
+  stream.ranges = std::move(merged);
+}
+
+bool is_complete(const FragmentStream & stream)
+{
+  return stream.total_size && stream.ranges.size() == 1 && stream.ranges.front().first == 0 &&
+         stream.ranges.front().second >= *stream.total_size;
 }
 
 class PcapReader
 {
 public:
-  explicit PcapReader(const fs::path & path) : sniffer_(path.string(), "ip") {}
+  explicit PcapReader(const fs::path & path) : stream_(path, std::ios::binary)
+  {
+    if (!stream_) {
+      throw std::runtime_error("Failed to open PCAP: " + path.string());
+    }
+
+    std::array<uint8_t, 24> header{};
+    stream_.read(reinterpret_cast<char *>(header.data()), header.size());
+    if (stream_.gcount() != static_cast<std::streamsize>(header.size())) {
+      throw std::runtime_error("Short PCAP global header: " + path.string());
+    }
+
+    const uint32_t magic_le = read_u32(header.data(), true);
+    const uint32_t magic_be = read_u32(header.data(), false);
+    if (magic_le == 0xa1b2c3d4U) {
+      little_endian_ = true;
+      timestamp_scale_ = 1000ULL;
+    } else if (magic_be == 0xa1b2c3d4U) {
+      little_endian_ = false;
+      timestamp_scale_ = 1000ULL;
+    } else if (magic_le == 0xa1b23c4dU) {
+      little_endian_ = true;
+      timestamp_scale_ = 1ULL;
+    } else if (magic_be == 0xa1b23c4dU) {
+      little_endian_ = false;
+      timestamp_scale_ = 1ULL;
+    } else {
+      throw std::runtime_error("Unsupported PCAP magic in: " + path.string());
+    }
+
+    const uint32_t link_type = read_u32(header.data() + 20, little_endian_) & 0xffffU;
+    if (link_type != 1U) {
+      throw std::runtime_error("Only Ethernet PCAP link type is supported: " + path.string());
+    }
+  }
 
   bool next_udp_payload(UdpPayload & out)
   {
-    while (auto packet = sniffer_.next_packet()) {
-      auto * pdu = packet.pdu();
-      if (pdu == nullptr) {
+    std::array<uint8_t, 16> packet_header{};
+    while (stream_.read(reinterpret_cast<char *>(packet_header.data()), packet_header.size())) {
+      const uint64_t timestamp_ns =
+        static_cast<uint64_t>(read_u32(packet_header.data(), little_endian_)) * 1000000000ULL +
+        static_cast<uint64_t>(read_u32(packet_header.data() + 4, little_endian_)) *
+          timestamp_scale_;
+      const uint32_t captured_len = read_u32(packet_header.data() + 8, little_endian_);
+      if (captured_len == 0) {
         continue;
       }
 
-      const auto reassembly_status = reassembler_.process(*pdu);
-      if (reassembly_status == Tins::IPv4Reassembler::FRAGMENTED) {
-        continue;
+      packet_buffer_.resize(captured_len);
+      stream_.read(reinterpret_cast<char *>(packet_buffer_.data()), packet_buffer_.size());
+      if (stream_.gcount() != static_cast<std::streamsize>(packet_buffer_.size())) {
+        return false;
       }
 
-      auto * udp = pdu->find_pdu<Tins::UDP>();
-      auto * raw = pdu->find_pdu<Tins::RawPDU>();
-      if (udp == nullptr || raw == nullptr) {
-        continue;
-      }
-
-      out.timestamp_ns = timestamp_to_ns(packet.timestamp());
-      out.payload = raw->payload();
-      if (!out.payload.empty()) {
+      if (parse_ethernet_udp(packet_buffer_, timestamp_ns, out)) {
         return true;
       }
     }
@@ -128,8 +238,113 @@ public:
   }
 
 private:
-  Tins::FileSniffer sniffer_;
-  Tins::IPv4Reassembler reassembler_;
+  bool parse_ethernet_udp(
+    const std::vector<uint8_t> & frame, uint64_t timestamp_ns, UdpPayload & out)
+  {
+    if (frame.size() < 14) {
+      return false;
+    }
+
+    size_t ether_type_offset = 12;
+    uint16_t ether_type = read_be16(frame.data() + ether_type_offset);
+    while (ether_type == 0x8100U || ether_type == 0x88a8U || ether_type == 0x9100U) {
+      ether_type_offset += 4;
+      if (frame.size() < ether_type_offset + 2) {
+        return false;
+      }
+      ether_type = read_be16(frame.data() + ether_type_offset);
+    }
+    if (ether_type != 0x0800U) {
+      return false;
+    }
+
+    const size_t ip_offset = ether_type_offset + 2;
+    if (frame.size() < ip_offset + 20) {
+      return false;
+    }
+
+    const uint8_t version = frame[ip_offset] >> 4U;
+    const size_t ip_header_len = static_cast<size_t>(frame[ip_offset] & 0x0fU) * 4U;
+    if (version != 4 || ip_header_len < 20 || frame.size() < ip_offset + ip_header_len) {
+      return false;
+    }
+
+    const uint16_t total_len = read_be16(frame.data() + ip_offset + 2);
+    if (total_len < ip_header_len || frame.size() < ip_offset + total_len) {
+      return false;
+    }
+
+    const uint8_t protocol = frame[ip_offset + 9];
+    if (protocol != 17) {
+      return false;
+    }
+
+    const uint16_t flags_offset = read_be16(frame.data() + ip_offset + 6);
+    const bool more_fragments = (flags_offset & 0x2000U) != 0;
+    const size_t fragment_offset = static_cast<size_t>(flags_offset & 0x1fffU) * 8U;
+    const auto * ip_payload = frame.data() + ip_offset + ip_header_len;
+    const size_t ip_payload_len = static_cast<size_t>(total_len) - ip_header_len;
+
+    if (!more_fragments && fragment_offset == 0) {
+      return parse_udp_payload(ip_payload, ip_payload_len, timestamp_ns, out);
+    }
+
+    FragmentKey key{
+      read_be32(frame.data() + ip_offset + 12),
+      read_be32(frame.data() + ip_offset + 16),
+      read_be16(frame.data() + ip_offset + 4),
+      protocol};
+    auto & stream = fragments_[key];
+    const size_t fragment_end = fragment_offset + ip_payload_len;
+    if (stream.data.size() < fragment_end) {
+      stream.data.resize(fragment_end);
+    }
+    std::copy(ip_payload, ip_payload + ip_payload_len, stream.data.begin() + fragment_offset);
+    add_range(stream, fragment_offset, fragment_end);
+    if (!more_fragments) {
+      stream.total_size = fragment_end;
+    }
+
+    if (!is_complete(stream)) {
+      if (fragments_.size() > kMaxFragmentStreams) {
+        fragments_.erase(fragments_.begin());
+      }
+      return false;
+    }
+
+    std::vector<uint8_t> assembled;
+    assembled.swap(stream.data);
+    assembled.resize(*stream.total_size);
+    fragments_.erase(key);
+    return parse_udp_payload(assembled.data(), assembled.size(), timestamp_ns, out);
+  }
+
+  static bool parse_udp_payload(
+    const uint8_t * data, size_t size, uint64_t timestamp_ns, UdpPayload & out)
+  {
+    if (size < 8) {
+      return false;
+    }
+    const uint16_t udp_len = read_be16(data + 4);
+    if (udp_len < 8 || udp_len > size) {
+      return false;
+    }
+    const size_t payload_len = static_cast<size_t>(udp_len) - 8;
+    if (payload_len == 0) {
+      return false;
+    }
+    out.timestamp_ns = timestamp_ns;
+    out.payload.assign(data + 8, data + 8 + payload_len);
+    return true;
+  }
+
+  static constexpr size_t kMaxFragmentStreams = 256;
+
+  std::ifstream stream_;
+  bool little_endian_{true};
+  uint64_t timestamp_scale_{1000ULL};
+  std::vector<uint8_t> packet_buffer_;
+  std::unordered_map<FragmentKey, FragmentStream, FragmentKeyHash> fragments_;
 };
 
 enum class Vendor {
@@ -155,6 +370,9 @@ struct SensorSpec
   double cut_angle{360.0};
   uint16_t rotation_speed{600};
   std::string return_mode;
+  // Additional lower-case filename prefixes (besides filename_prefix) that map to this sensor.
+  // Used so capture-tool naming conventions (e.g. "Seyond_E1X_*") resolve to the right decoder.
+  std::vector<std::string> filename_aliases;
 };
 
 std::vector<SensorSpec> make_specs()
@@ -168,7 +386,7 @@ std::vector<SensorSpec> make_specs()
     {"robosense_em4_", Vendor::Robosense, "EM4", "em4", {1084}, {0x55, 0xaa, 0x5a, 0xa5}, {}, 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Strongest"},
     {"robosense_emx_", Vendor::Robosense, "EMX", "emx", {812}, {0x55, 0xaa, 0x5a, 0xa5}, {}, 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Strongest"},
     {"seyond_hummingbird_d1_", Vendor::Seyond, "HummingbirdD1", "hummingbirdd1", {}, {0x6a, 0x17}, "seyond_hummingbirdd1/anglehv_table.bin", 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Single"},
-    {"seyond_robin_e_", Vendor::Seyond, "RobinE1X", "robine1x", {}, {0x6a, 0x17}, "seyond_robine1x/anglehv_table.bin", 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Single"},
+    {"seyond_robin_e_", Vendor::Seyond, "RobinE1X", "robine1x", {}, {0x6a, 0x17}, "seyond_robine1x/anglehv_table.bin", 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Single", {"seyond_e1x_"}},
     {"seyond_robin_w_", Vendor::Seyond, "RobinW", "robinw", {}, {0x6a, 0x17}, "seyond_robinw/anglehv_table.bin", 0.0, kUnfilteredMaxRangeMeters, 0, 360, 0, 360.0, 600, "Single"},
   };
   // clang-format on
@@ -188,11 +406,24 @@ std::string pointcloud_topic(const SensorSpec & spec)
   return "/" + spec.frame_id + "/pointcloud";
 }
 
+bool matches_spec(const std::string & filename_lower, const SensorSpec & spec)
+{
+  if (filename_lower.rfind(spec.filename_prefix, 0) == 0) {
+    return true;
+  }
+  for (const auto & alias : spec.filename_aliases) {
+    if (filename_lower.rfind(alias, 0) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const SensorSpec * find_spec(const fs::path & pcap, const std::vector<SensorSpec> & specs)
 {
-  const std::string filename = pcap.filename().string();
+  const std::string filename = to_lower(pcap.filename().string());
   for (const auto & spec : specs) {
-    if (filename.rfind(spec.filename_prefix, 0) == 0) {
+    if (matches_spec(filename, spec)) {
       return &spec;
     }
   }
@@ -236,10 +467,14 @@ void for_each_udp_payload(const fs::path & pcap, Callback && callback)
 class McapPointcloudWriter
 {
 public:
-  McapPointcloudWriter(fs::path output_path, std::string topic, std::string frame_id)
+  McapPointcloudWriter(fs::path output_path, std::string topic, std::string frame_id, bool force)
   : output_path_(std::move(output_path)), topic_(std::move(topic)), frame_id_(std::move(frame_id))
   {
     if (fs::exists(output_path_)) {
+      if (!force) {
+        throw std::runtime_error(
+          "Output already exists: " + output_path_.string() + " (pass --force to overwrite)");
+      }
       fs::remove_all(output_path_);
     }
     if (!output_path_.parent_path().empty()) {
@@ -249,6 +484,7 @@ public:
     rosbag2_storage::StorageOptions storage_options;
     storage_options.uri = output_path_.string();
     storage_options.storage_id = "mcap";
+
     rosbag2_cpp::ConverterOptions converter_options{"cdr", "cdr"};
     writer_.open(storage_options, converter_options);
     writer_.create_topic({topic_, "sensor_msgs/msg/PointCloud2", "cdr", ""});
@@ -270,6 +506,7 @@ public:
     msg.header.frame_id = frame_id_;
     msg.header.stamp = to_ros_stamp(timestamp_ns);
     writer_.write(msg, topic_, to_rclcpp_time(timestamp_ns));
+
     ++clouds_written_;
     points_written_ += pointcloud->size();
   }
@@ -293,7 +530,7 @@ void update_cloud_stats(ConversionStats & stats, const McapPointcloudWriter & wr
 }
 
 ConversionStats decode_hesai(
-  const fs::path & pcap, const SensorSpec & spec, const fs::path & calibration_root,
+  const std::vector<fs::path> & pcaps, const SensorSpec & spec, const fs::path & calibration_root,
   McapPointcloudWriter & writer)
 {
   auto config = std::make_shared<nebula::drivers::HesaiSensorConfiguration>();
@@ -351,16 +588,18 @@ ConversionStats decode_hesai(
   }
 
   ConversionStats stats;
-  for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
-    ++stats.udp_packets;
-    if (!is_data_payload(spec, payload.payload)) {
-      return;
-    }
-    ++stats.data_packets;
-    last_packet_timestamp_ns = payload.timestamp_ns;
-    driver.parse_cloud_packet(payload.payload);
-    update_cloud_stats(stats, writer);
-  });
+  for (const auto & pcap : pcaps) {
+    for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
+      ++stats.udp_packets;
+      if (!is_data_payload(spec, payload.payload)) {
+        return;
+      }
+      ++stats.data_packets;
+      last_packet_timestamp_ns = payload.timestamp_ns;
+      driver.parse_cloud_packet(payload.payload);
+      update_cloud_stats(stats, writer);
+    });
+  }
   return stats;
 }
 
@@ -406,7 +645,7 @@ struct RobosenseDecoderSeed
 };
 
 ConversionStats decode_robosense(
-  const fs::path & pcap, const SensorSpec & spec, const RobosenseDecoderSeed & seed,
+  const std::vector<fs::path> & pcaps, const SensorSpec & spec, const RobosenseDecoderSeed & seed,
   McapPointcloudWriter & writer)
 {
   auto driver = std::make_shared<nebula::drivers::RobosenseDriver>(seed.config, seed.calibration);
@@ -416,23 +655,25 @@ ConversionStats decode_robosense(
 
   ConversionStats stats;
   stats.info_packets = seed.info_packets;
-  for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
-    ++stats.udp_packets;
-    if (!is_data_payload(spec, payload.payload)) {
-      return;
-    }
-    ++stats.data_packets;
-    const auto pointcloud_ts = driver->parse_cloud_packet(payload.payload);
-    if (const auto pointcloud = std::get<0>(pointcloud_ts)) {
-      writer.write(pointcloud, seconds_to_ns(std::get<1>(pointcloud_ts)), payload.timestamp_ns);
-    }
-    update_cloud_stats(stats, writer);
-  });
+  for (const auto & pcap : pcaps) {
+    for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
+      ++stats.udp_packets;
+      if (!is_data_payload(spec, payload.payload)) {
+        return;
+      }
+      ++stats.data_packets;
+      const auto pointcloud_ts = driver->parse_cloud_packet(payload.payload);
+      if (const auto pointcloud = std::get<0>(pointcloud_ts)) {
+        writer.write(pointcloud, seconds_to_ns(std::get<1>(pointcloud_ts)), payload.timestamp_ns);
+      }
+      update_cloud_stats(stats, writer);
+    });
+  }
   return stats;
 }
 
 ConversionStats decode_seyond(
-  const fs::path & pcap, const SensorSpec & spec, const fs::path & calibration_root,
+  const std::vector<fs::path> & pcaps, const SensorSpec & spec, const fs::path & calibration_root,
   McapPointcloudWriter & writer)
 {
   nebula::drivers::SeyondSensorConfiguration config;
@@ -470,29 +711,35 @@ ConversionStats decode_seyond(
     calibration_result.value());
 
   ConversionStats stats;
-  for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
-    ++stats.udp_packets;
-    if (!is_data_payload(spec, payload.payload)) {
-      return;
-    }
-    ++stats.data_packets;
-    last_packet_timestamp_ns = payload.timestamp_ns;
-    decoder.unpack(payload.payload);
-    update_cloud_stats(stats, writer);
-  });
+  for (const auto & pcap : pcaps) {
+    for_each_udp_payload(pcap, [&](const UdpPayload & payload) {
+      ++stats.udp_packets;
+      if (!is_data_payload(spec, payload.payload)) {
+        return;
+      }
+      ++stats.data_packets;
+      last_packet_timestamp_ns = payload.timestamp_ns;
+      decoder.unpack(payload.payload);
+      update_cloud_stats(stats, writer);
+    });
+  }
   return stats;
 }
 
 struct Options
 {
-  fs::path input_pcap;
+  fs::path input;
   fs::path output_mcap;
   std::optional<fs::path> calibration_root;
+  bool force{false};
 };
 
 void print_usage(const char * argv0)
 {
-  std::cerr << "Usage: " << argv0 << " INPUT_PCAP OUTPUT_MCAP [--calibration-root PATH]\n";
+  std::cerr << "Usage: " << argv0 << " INPUT OUTPUT_MCAP [--calibration-root PATH]\n"
+            << "       " << argv0 << " INPUT OUTPUT_MCAP --force [--calibration-root PATH]\n"
+            << "  INPUT  a single PCAP file, or a directory of split PCAPs for one sensor\n"
+            << "         (all matching segments are decoded in order into a single MCAP)\n";
 }
 
 Options parse_args(int argc, char ** argv)
@@ -511,6 +758,8 @@ Options parse_args(int argc, char ** argv)
 
     if (arg == "--calibration-root") {
       options.calibration_root = fs::path(need_value(arg));
+    } else if (arg == "--force") {
+      options.force = true;
     } else if (arg == "--help" || arg == "-h") {
       print_usage(argv[0]);
       std::exit(0);
@@ -522,10 +771,10 @@ Options parse_args(int argc, char ** argv)
   }
 
   if (positional.size() != 2) {
-    throw std::runtime_error("Expected INPUT_PCAP and OUTPUT_MCAP");
+    throw std::runtime_error("Expected INPUT and OUTPUT_MCAP");
   }
 
-  options.input_pcap = positional[0];
+  options.input = positional[0];
   options.output_mcap = positional[1];
   return options;
 }
@@ -600,26 +849,33 @@ std::optional<RobosenseDecoderSeed> try_preload_robosense_difop(
 
 bool is_same_sensor_pcap(const fs::path & pcap, const SensorSpec & spec)
 {
-  const auto filename = pcap.filename().string();
-  return pcap.extension() == ".pcap" && filename.rfind(spec.filename_prefix, 0) == 0;
+  return to_lower(pcap.extension().string()) == ".pcap" &&
+         matches_spec(to_lower(pcap.filename().string()), spec);
 }
 
-std::vector<fs::path> candidate_difop_pcaps(const fs::path & pcap, const SensorSpec & spec)
+std::vector<fs::path> candidate_difop_pcaps(
+  const std::vector<fs::path> & pcaps, const SensorSpec & spec)
 {
   std::vector<fs::path> candidates;
   const auto add_candidate = [&](const fs::path & candidate) {
     std::error_code ec;
+    const fs::path absolute = fs::absolute(candidate);
     if (
-      !fs::is_regular_file(candidate, ec) || !is_same_sensor_pcap(candidate, spec) ||
-      std::find(candidates.begin(), candidates.end(), candidate) != candidates.end()) {
+      !fs::is_regular_file(absolute, ec) || !is_same_sensor_pcap(absolute, spec) ||
+      std::find(candidates.begin(), candidates.end(), absolute) != candidates.end()) {
       return;
     }
-    candidates.push_back(candidate);
+    candidates.push_back(absolute);
   };
 
-  const fs::path absolute_pcap = fs::absolute(pcap);
+  // The input PCAP(s) themselves are the primary DIFOP source: for a split recording the
+  // info/DIFOP packet may live in any of the segments, so try them in order first.
+  for (const auto & pcap : pcaps) {
+    add_candidate(pcap);
+  }
+
+  const fs::path absolute_pcap = fs::absolute(pcaps.front());
   const fs::path scenario_dir = absolute_pcap.parent_path();
-  add_candidate(absolute_pcap);
 
   std::error_code ec;
   for (const auto & entry : fs::directory_iterator(scenario_dir, ec)) {
@@ -644,73 +900,131 @@ std::vector<fs::path> candidate_difop_pcaps(const fs::path & pcap, const SensorS
   return candidates;
 }
 
-RobosenseDecoderSeed preload_robosense_difop(const fs::path & pcap, const SensorSpec & spec)
+RobosenseDecoderSeed preload_robosense_difop(
+  const std::vector<fs::path> & pcaps, const SensorSpec & spec)
 {
-  for (const auto & candidate : candidate_difop_pcaps(pcap, spec)) {
-    if (auto seed = try_preload_robosense_difop(pcap, candidate, spec)) {
+  for (const auto & candidate : candidate_difop_pcaps(pcaps, spec)) {
+    if (auto seed = try_preload_robosense_difop(pcaps.front(), candidate, spec)) {
       return *seed;
     }
   }
 
   throw std::runtime_error(
-    "No valid RoboSense DIFOP/info packet found in " + pcap.string() +
+    "No valid RoboSense DIFOP/info packet found in " + pcaps.front().string() +
     " or same-sensor sibling PCAPs");
 }
 
-void convert_one(
-  const fs::path & pcap, const fs::path & output, const SensorSpec & spec,
-  const fs::path & calibration_root)
+void convert(
+  const std::vector<fs::path> & pcaps, const fs::path & output, const SensorSpec & spec,
+  const fs::path & calibration_root, bool force)
 {
   const auto topic = pointcloud_topic(spec);
-  std::cout << "CONVERT " << pcap << " -> " << output << " [" << sensor_name(spec)
+  std::cout << "CONVERT " << pcaps.size() << " pcap(s) -> " << output << " [" << sensor_name(spec)
             << " topic=" << topic << "]" << std::endl;
+  for (const auto & pcap : pcaps) {
+    std::cout << "  INPUT " << pcap << std::endl;
+  }
 
   const auto robosense_seed = spec.vendor == Vendor::Robosense
-                                ? std::make_optional(preload_robosense_difop(pcap, spec))
+                                ? std::make_optional(preload_robosense_difop(pcaps, spec))
                                 : std::nullopt;
-  McapPointcloudWriter writer(output, topic, spec.frame_id);
+  McapPointcloudWriter writer(output, topic, spec.frame_id, force);
   ConversionStats stats;
   switch (spec.vendor) {
     case Vendor::Hesai:
-      stats = decode_hesai(pcap, spec, calibration_root, writer);
+      stats = decode_hesai(pcaps, spec, calibration_root, writer);
       break;
     case Vendor::Robosense:
-      stats = decode_robosense(pcap, spec, *robosense_seed, writer);
+      stats = decode_robosense(pcaps, spec, *robosense_seed, writer);
       break;
     case Vendor::Seyond:
-      stats = decode_seyond(pcap, spec, calibration_root, writer);
+      stats = decode_seyond(pcaps, spec, calibration_root, writer);
       break;
   }
 
-  std::cout << "DONE " << pcap << " udp=" << stats.udp_packets << " data=" << stats.data_packets
-            << " info=" << stats.info_packets << " clouds=" << writer.clouds_written()
-            << " points=" << writer.points_written() << std::endl;
+  std::cout << "DONE " << output << " pcaps=" << pcaps.size() << " udp=" << stats.udp_packets
+            << " data=" << stats.data_packets << " info=" << stats.info_packets
+            << " clouds=" << writer.clouds_written() << " points=" << writer.points_written()
+            << std::endl;
 
   if (writer.clouds_written() == 0) {
-    throw std::runtime_error("No pointclouds decoded from " + pcap.string());
+    throw std::runtime_error("No pointclouds decoded from " + pcaps.front().string());
   }
+}
+
+struct ResolvedInput
+{
+  std::vector<fs::path> pcaps;
+  const SensorSpec * spec{nullptr};
+};
+
+// Resolve the INPUT argument into the ordered set of PCAPs to decode and the sensor they belong
+// to. A single file resolves to itself; a directory resolves to every matching split segment it
+// contains, sorted (timestamped capture names sort chronologically) and required to be one sensor.
+ResolvedInput resolve_input(const fs::path & input, const std::vector<SensorSpec> & specs)
+{
+  std::error_code ec;
+
+  if (fs::is_regular_file(input, ec)) {
+    const auto * spec = find_spec(input, specs);
+    if (spec == nullptr) {
+      throw std::runtime_error("Unsupported PCAP filename prefix: " + input.filename().string());
+    }
+    return {{input}, spec};
+  }
+
+  if (fs::is_directory(input, ec)) {
+    std::vector<fs::path> pcaps;
+    for (const auto & entry : fs::directory_iterator(input, ec)) {
+      if (entry.is_regular_file() && to_lower(entry.path().extension().string()) == ".pcap") {
+        pcaps.push_back(entry.path());
+      }
+    }
+    if (pcaps.empty()) {
+      throw std::runtime_error("No .pcap files found in directory: " + input.string());
+    }
+    std::sort(pcaps.begin(), pcaps.end());
+
+    const SensorSpec * spec = nullptr;
+    std::vector<fs::path> matched;
+    for (const auto & pcap : pcaps) {
+      const auto * candidate_spec = find_spec(pcap, specs);
+      if (candidate_spec == nullptr) {
+        continue;
+      }
+      if (spec == nullptr) {
+        spec = candidate_spec;
+      } else if (candidate_spec != spec) {
+        throw std::runtime_error(
+          "Directory contains PCAPs for multiple sensors (" + sensor_name(*spec) + " and " +
+          sensor_name(*candidate_spec) + "); point at a single-sensor directory: " +
+          input.string());
+      }
+      matched.push_back(pcap);
+    }
+    if (spec == nullptr) {
+      throw std::runtime_error("No supported PCAPs found in directory: " + input.string());
+    }
+    return {std::move(matched), spec};
+  }
+
+  throw std::runtime_error("Input is neither a file nor a directory: " + input.string());
 }
 
 int run(int argc, char ** argv)
 {
   try {
     const auto options = parse_args(argc, argv);
-    if (!fs::is_regular_file(options.input_pcap)) {
-      throw std::runtime_error("Input PCAP does not exist: " + options.input_pcap.string());
-    }
 
     rclcpp::init(argc, argv);
 
     const auto specs = make_specs();
-    const auto * spec = find_spec(options.input_pcap, specs);
-    if (spec == nullptr) {
-      throw std::runtime_error(
-        "Unsupported PCAP filename prefix: " + options.input_pcap.filename().string());
-    }
+    const auto resolved = resolve_input(options.input, specs);
+    const auto & spec = *resolved.spec;
 
     const auto calibration_root =
-      infer_calibration_root(options.input_pcap, *spec, options.calibration_root);
-    convert_one(options.input_pcap, options.output_mcap, *spec, calibration_root);
+      infer_calibration_root(resolved.pcaps.front(), spec, options.calibration_root);
+    convert(resolved.pcaps, options.output_mcap, spec, calibration_root, options.force);
 
     rclcpp::shutdown();
     return 0;
